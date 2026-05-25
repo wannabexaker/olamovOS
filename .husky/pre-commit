@@ -1,1 +1,1 @@
-yarn lint-staged
+corepack yarn lint-staged

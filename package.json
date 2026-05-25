@@ -8,11 +8,16 @@
     "url": "https://olamov.com"
   },
   "license": "MIT",
+  "packageManager": "yarn@1.22.22",
+  "engines": {
+    "node": ">=22"
+  },
   "browserslist": [
     "defaults and supports es6 and not ie 11 and >1%"
   ],
   "scripts": {
     "build": "yarn build:prebuild && next build",
+    "build:cloudflare": "NODE_OPTIONS=--openssl-legacy-provider yarn build",
     "build:bundle-analyzer": "yarn build",
     "build:fs:private": "node scripts/fs2json.js --out public/.index/fs.private.9p.json ./public/private",
     "build:fs:public": "node scripts/fs2json.js --exclude .index,private --out public/.index/fs.9p.json ./public",

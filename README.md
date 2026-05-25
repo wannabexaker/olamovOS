@@ -34,6 +34,15 @@ Open: `http://localhost:3001`
 $env:NODE_OPTIONS="--openssl-legacy-provider"; corepack yarn build
 ```
 
+## Cloudflare Pages
+
+Use:
+
+- Build command: `yarn build:cloudflare`
+- Build output directory: `out`
+- Node.js: `22`
+- Package manager: Yarn Classic `1.22.22`
+
 ## Project Notes
 
 - The default wallpaper is `public/Users/Public/Pictures/olamov-default.png`.
