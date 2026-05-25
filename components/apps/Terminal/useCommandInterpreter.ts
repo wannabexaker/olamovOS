@@ -214,6 +214,12 @@ const useCommandInterpreter = (
       try {
         // eslint-disable-next-line sonarjs/max-switch-cases
         switch (lcBaseCommand) {
+          case "about":
+            printLn("Olamov OS 1.0");
+            printLn("Olamov Universe");
+            printLn("systems. intelligence. experiments.");
+            printLn("© 1999 Olamov Systems. All rights reserved.");
+            break;
           case "cat":
           case "type": {
             const [file] = commandArgs;

@@ -5,11 +5,9 @@ import {
   importAIButton,
   importAIChat,
   importCalendar,
-  importSearch,
   importStartMenu,
 } from "components/system/Taskbar/functions";
 import Clock from "components/system/Taskbar/Clock";
-import SearchButton from "components/system/Taskbar/Search/SearchButton";
 import StartButton from "components/system/Taskbar/StartButton";
 import StyledTaskbar from "components/system/Taskbar/StyledTaskbar";
 import TaskbarEntries from "components/system/Taskbar/TaskbarEntries";
@@ -21,12 +19,10 @@ import { useSession } from "contexts/session";
 const AIButton = dynamic(importAIButton);
 const AIChat = dynamic(importAIChat);
 const Calendar = dynamic(importCalendar);
-const Search = dynamic(importSearch);
 const StartMenu = dynamic(importStartMenu);
 
 const Taskbar: FC = () => {
   const [startMenuVisible, setStartMenuVisible] = useState(false);
-  const [searchVisible, setSearchVisible] = useState(false);
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [aiVisible, setAIVisible] = useState(false);
   const [clockWidth, setClockWidth] = useState(CLOCK_CANVAS_BASE_WIDTH);
@@ -35,13 +31,6 @@ const Taskbar: FC = () => {
   const toggleStartMenu = useCallback(
     (showMenu?: boolean): void =>
       setStartMenuVisible((currentMenuState) => showMenu ?? !currentMenuState),
-    []
-  );
-  const toggleSearch = useCallback(
-    (showSearch?: boolean): void =>
-      setSearchVisible(
-        (currentSearchState) => showSearch ?? !currentSearchState
-      ),
     []
   );
   const toggleCalendar = useCallback(
@@ -64,16 +53,11 @@ const Taskbar: FC = () => {
         {startMenuVisible && (
           <StartMenu key="startMenu" toggleStartMenu={toggleStartMenu} />
         )}
-        {searchVisible && <Search key="search" toggleSearch={toggleSearch} />}
       </AnimatePresence>
       <StyledTaskbar {...useTaskbarContextMenu()} {...FOCUSABLE_ELEMENT}>
         <StartButton
           startMenuVisible={startMenuVisible}
           toggleStartMenu={toggleStartMenu}
-        />
-        <SearchButton
-          searchVisible={searchVisible}
-          toggleSearch={toggleSearch}
         />
         <TaskbarEntries clockWidth={clockWidth} hasAI={hasAI} />
         <Clock

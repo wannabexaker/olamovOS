@@ -68,18 +68,20 @@ const StyledTitlebar = styled.header<StyledTitlebarProps>`
     display: flex;
 
     button {
-      border-left: ${styledBorder};
+      background: #c0c0c0;
+      border-color: #fff #404040 #404040 #fff;
+      border-style: solid;
+      border-width: 1px;
       box-sizing: content-box;
       display: flex;
+      margin: 3px 2px;
       place-content: center;
       place-items: center;
       width: ${({ theme }) => theme.sizes.titleBar.buttonWidth};
 
       svg {
         fill: ${({ $foreground, theme }) =>
-          $foreground
-            ? theme.colors.titleBar.text
-            : theme.colors.titleBar.buttonInactive};
+          $foreground ? "#0a0010" : theme.colors.titleBar.buttonInactive};
         margin: 0 1px 2px 0;
         width: ${({ theme }) => theme.sizes.titleBar.buttonIconWidth};
       }
@@ -92,11 +94,10 @@ const StyledTitlebar = styled.header<StyledTitlebarProps>`
       }
 
       &:hover {
-        background-color: ${({ theme }) =>
-          theme.colors.titleBar.backgroundHover};
+        background-color: #dfdfdf;
 
         svg {
-          fill: ${({ theme }) => theme.colors.titleBar.text};
+          fill: #0a0010;
         }
 
         &.close {

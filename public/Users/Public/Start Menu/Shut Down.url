@@ -1,0 +1,5 @@
+[InternetShortcut]
+BaseURL=Terminal
+Comment=Local shutdown command stub.
+IconFile=/System/Icons/screensaver.webp
+URL=shutdown

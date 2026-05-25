@@ -32,7 +32,7 @@ import {
   loadFiles,
 } from "utils/functions";
 
-const { alias, author, license } = PACKAGE_DATA;
+const { alias, license } = PACKAGE_DATA;
 
 export const displayLicense = `${license} License`;
 
@@ -168,7 +168,8 @@ const useTerminal = ({
           .then((command) => processCommand.current?.(command).then(prompt));
 
       localEcho.println(`${alias} [Version ${displayVersion()}]`);
-      localEcho.println(`By ${author.name}. ${displayLicense}.`);
+      localEcho.println("Olamov Universe");
+      localEcho.println("systems. intelligence. experiments.");
 
       if (initialCommand) {
         localEcho.println(

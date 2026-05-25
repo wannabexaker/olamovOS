@@ -13,6 +13,7 @@ const StyledTaskbarButton = styled(Button)<StyledTaskbarButtonProps>`
     ($highlight ? theme.colors.taskbar.foreground : "hsla(0, 0%, 25%, 50%)")};
   display: flex;
   fill: ${({ theme }) => theme.colors.taskbar.button.color};
+  gap: 6px;
   height: 100%;
   left: ${({ $left }) => ($left ? `${$left}px` : 0)};
   place-content: center;
@@ -25,6 +26,12 @@ const StyledTaskbarButton = styled(Button)<StyledTaskbarButtonProps>`
 
   svg {
     height: ${({ theme }) => theme.sizes.taskbar.button.iconSize};
+  }
+
+  span {
+    color: ${({ theme }) => theme.colors.taskbar.button.color};
+    font-size: 13px;
+    font-weight: 700;
   }
 
   &:hover {

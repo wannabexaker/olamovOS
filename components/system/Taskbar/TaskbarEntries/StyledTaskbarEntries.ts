@@ -9,7 +9,7 @@ const StyledTaskbarEntries = styled.ol<StyledTaskbarEntriesProps>`
   column-gap: 1px;
   display: flex;
   height: 100%;
-  left: ${({ theme }) => theme.sizes.taskbar.button.width * 2}px;
+  left: ${({ theme }) => theme.sizes.taskbar.button.width}px;
   margin: 0 3px;
   overflow: hidden;
   position: absolute;

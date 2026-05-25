@@ -1,8 +1,6 @@
 import { useTheme } from "styled-components";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
-import { type Variant } from "motion/react";
 import FileManager from "components/system/Files/FileManager";
-import Sidebar from "components/system/StartMenu/Sidebar";
 import StyledStartMenu from "components/system/StartMenu/StyledStartMenu";
 import { updateInputValueOnReactElement } from "components/system/Taskbar/Search/functions";
 import {
@@ -22,10 +20,6 @@ import { getNavButtonByTitle } from "hooks/useGlobalKeyboardShortcuts";
 
 type StartMenuProps = {
   toggleStartMenu: (showMenu?: boolean) => void;
-};
-
-type StyleVariant = Variant & {
-  height?: string;
 };
 
 const StartMenu: FC<StartMenuProps> = ({ toggleStartMenu }) => {
@@ -55,8 +49,6 @@ const StartMenu: FC<StartMenuProps> = ({ toggleStartMenu }) => {
     menuRef.current = element;
   }, []);
   const startMenuTransition = useTaskbarItemTransition(startMenu.maxHeight);
-  const { height } =
-    (startMenuTransition.variants?.active as StyleVariant) ?? {};
 
   return (
     <StyledStartMenu
@@ -104,7 +96,6 @@ const StartMenu: FC<StartMenuProps> = ({ toggleStartMenu }) => {
       {...startMenuTransition}
       {...FOCUSABLE_ELEMENT}
     >
-      <Sidebar height={height} />
       <FileManager
         url={START_MENU_PATH}
         hideLoading

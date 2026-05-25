@@ -26,6 +26,7 @@ export const help = (
 };
 
 export const commands: Record<string, string> = {
+  about: "Displays Olamov OS information.",
   cd: "Changes the current directory.",
   clear: "Clears the screen.",
   color: "Specifies color attribute of console output.",

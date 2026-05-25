@@ -6,7 +6,6 @@ const StyledTerminal = styled.div`
   width: 100%;
 
   .terminal {
-    backdrop-filter: blur(8px);
     height: 100% !important;
   }
 
@@ -18,7 +17,7 @@ const StyledTerminal = styled.div`
   .xterm-screen {
     .xterm-rows {
       .xterm-cursor-underline {
-        border-bottom-color: #f3f3f3 !important;
+        border-bottom-color: #cc00ff !important;
         border-bottom-width: 4px !important;
       }
 

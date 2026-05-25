@@ -18,14 +18,34 @@ public/Users/Public/**
 
 !public/Users/**/desktop.ini
 !public/Users/Public/Desktop
-!public/Users/Public/Desktop/My PC.url
-!public/Users/Public/Desktop/Public.url
+!public/Users/Public/Desktop/My Computer.url
+!public/Users/Public/Desktop/Olamov Terminal.url
+!public/Users/Public/Desktop/Readme.txt
+!public/Users/Public/Desktop/Documents
+!public/Users/Public/Desktop/Documents/desktop.ini
+!public/Users/Public/Desktop/Experiments
+!public/Users/Public/Desktop/Experiments/desktop.ini
+!public/Users/Public/Desktop/Games
+!public/Users/Public/Desktop/Games/desktop.ini
+!public/Users/Public/Desktop/Research
+!public/Users/Public/Desktop/Research/desktop.ini
+!public/Users/Public/Desktop/Systems
+!public/Users/Public/Desktop/Systems/desktop.ini
+!public/Users/Public/Desktop/Tools
+!public/Users/Public/Desktop/Tools/desktop.ini
 !public/Users/Public/Documents
 !public/Users/Public/Music
 !public/Users/Public/Pictures
+!public/Users/Public/Pictures/*.png
 !public/Users/Public/Pictures/prompts.json
 !public/Users/Public/Pictures/slideshow.json
 !public/Users/Public/Start Menu
+!public/Users/Public/Start Menu/Documents
+!public/Users/Public/Start Menu/Documents/desktop.ini
+!public/Users/Public/Start Menu/Programs
+!public/Users/Public/Start Menu/Programs/**
+!public/Users/Public/Start Menu/Settings
+!public/Users/Public/Start Menu/Settings/desktop.ini
 !public/Users/Public/Start Menu/*.url
 !public/Users/Public/Start Menu/Emulators
 !public/Users/Public/Start Menu/Emulators/*.url

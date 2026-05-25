@@ -53,6 +53,7 @@ const StartButton: FC<StartButtonProps> = ({
       {...useMenuPreload(preloadStartMenu)}
     >
       <StartButtonIcon />
+      <span>Start</span>
     </StyledTaskbarButton>
   );
 };

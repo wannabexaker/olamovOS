@@ -149,6 +149,11 @@ const extensions: Record<string, Extension> = {
   ".swf": types.ShockwaveFlash,
   ".tic": types.Tic80,
   ".ttf": types.Font,
+  ".txt": {
+    icon: "documents",
+    process: ["Notepad", ...TEXT_EDITORS],
+    type: "Text Document",
+  },
   ".wasm": types.WasmFile,
   ".whtml": types.WysiwygHtmlDocument,
   ".woff": types.Font,

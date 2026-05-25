@@ -24,7 +24,7 @@ export const DEFAULT_CLOSE_EFFECT = "None";
 
 export const DEFAULT_THEME: ThemeName = "defaultTheme";
 
-export const DEFAULT_WALLPAPER = "VANTA";
+export const DEFAULT_WALLPAPER = "/Users/Public/Pictures/olamov-default.png";
 
 export const DEFAULT_WALLPAPER_FIT: WallpaperFit = "fill";
 
@@ -371,16 +371,17 @@ export const DEFAULT_SCROLLBAR_WIDTH = 17;
 export const TASKBAR_HEIGHT = 30;
 
 export const PACKAGE_DATA = {
-  alias: "daedalOS",
+  alias: "Olamov OS",
   author: {
-    email: "dustinbrett@gmail.com",
-    name: "Dustin Brett",
-    npub: "npub10uc7hg6wdxhhd7ee8x9c5lr9d0ux7272rv2m0mc03ds54q7quxjss02r3p",
-    url: "https://dustinbrett.com",
+    email: "systems@olamov.local",
+    name: "Olamov Systems",
+    npub: "",
+    url: "https://olamov.com",
   },
-  description: "Desktop environment in the browser",
+  description:
+    "Olamov OS is a fictional retro desktop environment for systems, intelligence, and experiments.",
   license: "MIT",
-  version: "2.0.0",
+  version: "1.0.0",
 };
 
 export const BASE_ZIP_CONFIG: AsyncZipOptions = {

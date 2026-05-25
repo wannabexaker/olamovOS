@@ -157,6 +157,16 @@ const directory: Processes = {
     singleton: true,
     title: "Messenger",
   },
+  Notepad: {
+    Component: dynamic(() => import("components/apps/Notepad")),
+    backgroundColor: "#c0c0c0",
+    defaultSize: {
+      height: 360,
+      width: 480,
+    },
+    icon: "/System/Icons/documents.webp",
+    title: "Readme.txt - Notepad",
+  },
   MonacoEditor: {
     Component: dynamic(() => import("components/apps/MonacoEditor")),
     backgroundColor: "#1E1E1E",
@@ -311,8 +321,7 @@ const directory: Processes = {
   },
   Terminal: {
     Component: dynamic(() => import("components/apps/Terminal")),
-    backgroundBlur: "8px",
-    backgroundColor: "rgba(12, 12, 12, 0.5)",
+    backgroundColor: "#000",
     defaultSize: {
       height: 374,
       width: 615,
@@ -325,7 +334,7 @@ const directory: Processes = {
       "/Program Files/Xterm.js/local-echo.js",
     ],
     preferProcessIcon: true,
-    title: "Terminal",
+    title: "Olamov Terminal",
   },
   Tic80: {
     Component: dynamic(() => import("components/apps/Tic80")),

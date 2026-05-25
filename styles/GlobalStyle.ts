@@ -1,6 +1,13 @@
 import * as styled from "styled-components";
 
 const GlobalStyle = styled.createGlobalStyle`
+  :root {
+    --olamov-black: #0a0010;
+    --olamov-deep-violet: #1a0033;
+    --olamov-purple: #6600cc;
+    --olamov-neon: #cc00ff;
+  }
+
   *,
   *::before,
   *::after {
@@ -20,6 +27,7 @@ const GlobalStyle = styled.createGlobalStyle`
   body,
   html {
     font-family: ${({ theme }) => theme.formats.systemFont};
+    min-width: 800px;
   }
 
   body {
@@ -27,6 +35,7 @@ const GlobalStyle = styled.createGlobalStyle`
     overflow: hidden;
     position: fixed;
     text-size-adjust: none;
+    width: 100%;
   }
 
   html {

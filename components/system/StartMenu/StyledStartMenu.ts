@@ -17,24 +17,25 @@ const StyledStartMenu = styled(motion.nav)<StyledStartMenuProps>`
   ${({ theme }) =>
     TaskbarPanel(theme.sizes.startMenu.maxHeight, theme.sizes.startMenu.size)}
 
-  backdrop-filter: ${({ theme }) => `blur(${theme.sizes.taskbar.panelBlur})`};
+  background: #c0c0c0;
+  border-color: #fff #404040 #404040 #fff;
+  border-style: solid;
+  border-width: 2px;
+  box-shadow: 2px 2px 0 #0a0010;
 
   ${StyledFileManager} {
     ${ScrollBars(THIN_SCROLLBAR_WIDTH, -2, -1)};
     margin-top: 0;
     overflow-x: hidden;
-    padding-bottom: ${({ theme }) =>
-      theme.sizes.startMenu.sideBar.buttonHeight / 2}px;
-    padding-left: ${({ theme }) => theme.sizes.startMenu.sideBar.width}px;
-    padding-top: 7px;
+    padding: 4px 0;
 
     ${StyledFileEntry} {
       width: ${({ theme }) =>
-        `${theme.sizes.startMenu.size - theme.sizes.startMenu.sideBar.width - THIN_SCROLLBAR_WIDTH}px`};
+        `${theme.sizes.startMenu.size - THIN_SCROLLBAR_WIDTH}px`};
 
       @supports not selector(::-webkit-scrollbar) {
         width: ${({ theme }) =>
-          `${theme.sizes.startMenu.size - theme.sizes.startMenu.sideBar.width - THIN_SCROLLBAR_WIDTH_NON_WEBKIT}px`};
+          `${theme.sizes.startMenu.size - THIN_SCROLLBAR_WIDTH_NON_WEBKIT}px`};
       }
     }
 

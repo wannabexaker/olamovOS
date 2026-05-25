@@ -1,11 +1,11 @@
 {
-  "name": "daedalos",
-  "version": "2.0.0",
-  "description": "Desktop environment in the browser",
+  "name": "olamov-os",
+  "version": "1.0.0",
+  "description": "Olamov OS retro desktop environment in the browser",
   "author": {
-    "name": "Dustin Brett",
-    "email": "dustinbrett@gmail.com",
-    "url": "https://dustinbrett.com"
+    "name": "Olamov Systems",
+    "email": "systems@olamov.local",
+    "url": "https://olamov.com"
   },
   "license": "MIT",
   "browserslist": [
@@ -18,8 +18,8 @@
     "build:fs:public": "node scripts/fs2json.js --exclude .index,private --out public/.index/fs.9p.json ./public",
     "build:minify": "node scripts/minifyHtml.js && node scripts/minifyJs.js",
     "build:prebuild": "node scripts/robots.js && node scripts/rssBuilder.js && node scripts/searchIndex.js && node scripts/preloadIcons.js && node scripts/cacheShortcuts.js && yarn build:fs:public",
-    "docker:build": "docker build -t daedalos .",
-    "docker:run": "docker run -dp 3000:3000 --rm --name daedalos daedalos",
+    "docker:build": "docker build -t olamov-os .",
+    "docker:run": "docker run -dp 3000:3000 --rm --name olamov-os olamov-os",
     "dev": "next dev",
     "dev:ssl": "next dev --experimental-https",
     "e2e": "playwright test",

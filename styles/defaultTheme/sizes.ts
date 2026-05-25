@@ -61,7 +61,7 @@ const sizes = {
     blur: "5px",
     button: {
       iconSize: "15px",
-      width: 36,
+      width: 88,
     },
     entry: {
       borderSize: "2px",
@@ -78,9 +78,9 @@ const sizes = {
   },
   titleBar: {
     buttonIconWidth: "10px",
-    buttonWidth: "45px",
+    buttonWidth: "24px",
     fontSize: "12px",
-    height: 30,
+    height: 24,
     iconMarginRight: "4px",
     iconSize: "16px",
   },
