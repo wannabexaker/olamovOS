@@ -1,5 +1,9 @@
 # Credits
 
+## Base Project
+
+Olamov OS is an adaptation of daedalOS by Dustin Brett, released under the MIT License. Thank you to Dustin for sharing a deeply crafted browser desktop project openly; this fork keeps that attribution while shaping the experience around the Olamov identity.
+
 This project is greatly augmented by code from the open source community. Thank you to all the developers who have contributed to these projects!
 
 ## Frameworks

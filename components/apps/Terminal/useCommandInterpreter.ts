@@ -218,7 +218,7 @@ const useCommandInterpreter = (
             printLn("Olamov OS 1.0");
             printLn("Olamov Universe");
             printLn("systems. intelligence. experiments.");
-            printLn("© 1999 Olamov Systems. All rights reserved.");
+            printLn("(c) 1999 Olamov Systems.");
             break;
           case "cat":
           case "type": {

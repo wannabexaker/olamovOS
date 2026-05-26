@@ -40,8 +40,8 @@ Use:
 
 - Build command: `yarn build:cloudflare`
 - Build output directory: `out`
-- Node.js: `22`
-- Package manager: Yarn Classic `1.22.22`
+- Environment variable `NODE_VERSION=22`
+- Environment variable `YARN_VERSION=1.22.22`
 
 ## Project Notes
 

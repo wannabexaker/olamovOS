@@ -13,7 +13,7 @@ const StyledDesktop = styled.main`
   width: 100%;
 
   &::before {
-    color: #cc00ff;
+    color: #c0f;
     content: "Olamov Universe\\A systems. intelligence. experiments.";
     font-size: 14px;
     line-height: 1.7;
@@ -30,7 +30,7 @@ const StyledDesktop = styled.main`
   &::after {
     bottom: ${TASKBAR_HEIGHT + 8}px;
     color: #fff;
-    content: "© 1999 Olamov Systems. All rights reserved.";
+    content: "(c) 1999 Olamov Systems.";
     font-size: 12px;
     left: 8px;
     pointer-events: none;

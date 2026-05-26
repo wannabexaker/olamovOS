@@ -1,6 +1,8 @@
 .next
 .swc
 certificates
+dev/
+docs/olamov-app-service-inventory.md
 out
 
 node_modules
@@ -15,25 +17,21 @@ public/rss.xml
 public/sitemap.xml
 public/.index/*
 public/Users/Public/**
+Windows 98 icons/
 
 !public/Users/**/desktop.ini
 !public/Users/Public/Desktop
-!public/Users/Public/Desktop/My Computer.url
+!public/Users/Public/Desktop/My PC.url
+!public/Users/Public/Desktop/Public.url
+!public/Users/Public/Desktop/Blog Posts.url
+!public/Users/Public/Desktop/Doom.url
 !public/Users/Public/Desktop/Olamov Terminal.url
-!public/Users/Public/Desktop/Readme.txt
-!public/Users/Public/Desktop/Documents
-!public/Users/Public/Desktop/Documents/desktop.ini
-!public/Users/Public/Desktop/Experiments
-!public/Users/Public/Desktop/Experiments/desktop.ini
-!public/Users/Public/Desktop/Games
-!public/Users/Public/Desktop/Games/desktop.ini
-!public/Users/Public/Desktop/Research
-!public/Users/Public/Desktop/Research/desktop.ini
-!public/Users/Public/Desktop/Systems
-!public/Users/Public/Desktop/Systems/desktop.ini
-!public/Users/Public/Desktop/Tools
-!public/Users/Public/Desktop/Tools/desktop.ini
 !public/Users/Public/Documents
+!public/Users/Public/Documents/Blog Posts
+!public/Users/Public/Documents/Blog Posts/desktop.ini
+!public/Users/Public/Documents/DOS Bundles
+!public/Users/Public/Documents/DOS Bundles/desktop.ini
+!public/Users/Public/Documents/DOS Bundles/doom.jsdos
 !public/Users/Public/Music
 !public/Users/Public/Pictures
 !public/Users/Public/Pictures/*.png

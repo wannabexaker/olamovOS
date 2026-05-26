@@ -1,6 +1,6 @@
 import dynamic from "next/dynamic";
 import { type Processes } from "contexts/process/types";
-import { FOLDER_ICON, TASKBAR_HEIGHT } from "utils/constants";
+import { TASKBAR_HEIGHT } from "utils/constants";
 
 const directory: Processes = {
   BoxedWine: {
@@ -29,7 +29,7 @@ const directory: Processes = {
       height: 500,
       width: 600,
     },
-    icon: "/System/Icons/chromium.webp",
+    icon: "/System/Icons/olamov-browser.png",
     title: "Browser",
   },
   Chess: {
@@ -70,7 +70,7 @@ const directory: Processes = {
       height: 380,
       width: 545,
     },
-    icon: "/System/Icons/eruda.webp",
+    icon: "/System/Icons/olamov-devtools.png",
     libs: [
       "/Program Files/Eruda/eruda.js",
       "/Program Files/Eruda/eruda-monitor.js",
@@ -89,7 +89,7 @@ const directory: Processes = {
       "/Program Files/EmulatorJs/emu-css.min.css",
       "/Program Files/EmulatorJs/emulator.min.js",
     ],
-    icon: "/System/Icons/emulator.webp",
+    icon: "/System/Icons/olamov-emulator.png",
     libs: ["/Program Files/EmulatorJs/loader.js"],
     lockAspectRatio: true,
     title: "Emulator",
@@ -101,7 +101,7 @@ const directory: Processes = {
       height: 325,
       width: 447,
     },
-    icon: FOLDER_ICON,
+    icon: "/System/Icons/olamov-folder.png",
     title: "File Explorer",
   },
   IRC: {
@@ -111,7 +111,7 @@ const directory: Processes = {
       height: 512,
       width: 704,
     },
-    icon: "/System/Icons/kiwiirc.webp",
+    icon: "/System/Icons/olamov-chat.png",
     libs: ["/Program Files/kiwiirc/index.html"],
     title: "IRC",
   },
@@ -124,7 +124,7 @@ const directory: Processes = {
       width: 320,
     },
     dependantLibs: ["/Program Files/js-dos/wdosbox.wasm"],
-    icon: "/System/Icons/jsdos.webp",
+    icon: "/System/Icons/olamov-msdos.png",
     libs: [
       "/Program Files/js-dos/emulators.js",
       "/Program Files/js-dos/emulators-ui.js",
@@ -139,7 +139,7 @@ const directory: Processes = {
       height: 480,
       width: 560,
     },
-    icon: "/System/Icons/marked.webp",
+    icon: "/System/Icons/olamov-html.png",
     libs: [
       "/Program Files/Marked/marked.min.js",
       "/Program Files/Marked/purify.min.js",
@@ -153,19 +153,9 @@ const directory: Processes = {
       height: 500,
       width: 425,
     },
-    icon: "/System/Icons/messenger.webp",
+    icon: "/System/Icons/olamov-chat.png",
     singleton: true,
     title: "Messenger",
-  },
-  Notepad: {
-    Component: dynamic(() => import("components/apps/Notepad")),
-    backgroundColor: "#c0c0c0",
-    defaultSize: {
-      height: 360,
-      width: 480,
-    },
-    icon: "/System/Icons/documents.webp",
-    title: "Readme.txt - Notepad",
   },
   MonacoEditor: {
     Component: dynamic(() => import("components/apps/MonacoEditor")),
@@ -180,8 +170,18 @@ const directory: Processes = {
       "/Program Files/MonacoEditor/vs/editor/editor.main.css",
       "/Program Files/MonacoEditor/vs/editor/editor.main.nls.js",
     ],
-    icon: "/System/Icons/monaco.webp",
+    icon: "/System/Icons/olamov-monaco.png",
     title: "Monaco Editor",
+  },
+  Notepad: {
+    Component: dynamic(() => import("components/apps/Notepad")),
+    backgroundColor: "#c0c0c0",
+    defaultSize: {
+      height: 360,
+      width: 480,
+    },
+    icon: "/System/Icons/olamov-documents.png",
+    title: "Readme.txt - Notepad",
   },
   OpenType: {
     Component: dynamic(() => import("components/apps/OpenType")),
@@ -201,20 +201,20 @@ const directory: Processes = {
     dialogProcess: true,
     hideTaskbarEntry: true,
     hideTitlebar: true,
-    icon: "/System/Icons/unknown.webp",
+    icon: "/System/Icons/olamov-unknown.png",
     title: "Open With",
   },
   PDF: {
     Component: dynamic(() => import("components/apps/PDF")),
     backgroundColor: "#525659",
-    icon: "/System/Icons/pdf.webp",
+    icon: "/System/Icons/olamov-pdf.png",
     libs: ["/Program Files/PDF.js/pdf.js"],
     title: "PDF",
   },
   Paint: {
     Component: dynamic(() => import("components/apps/Paint")),
     backgroundColor: "#808080",
-    icon: "/System/Icons/paint.webp",
+    icon: "/System/Icons/olamov-paint.png",
     libs: ["/Program Files/jspaint/index.html"],
     title: "Paint",
   },
@@ -226,7 +226,7 @@ const directory: Processes = {
       width: 576,
     },
     hideTitlebarIcon: true,
-    icon: "/System/Icons/photos.webp",
+    icon: "/System/Icons/olamov-pictures.png",
     title: "Photos",
   },
   Properties: {
@@ -277,7 +277,7 @@ const directory: Processes = {
     dialogProcess: true,
     hideMaximizeButton: true,
     hideMinimizeButton: true,
-    icon: "/System/Icons/run.webp",
+    icon: "/System/Icons/olamov-run.png",
     initialRelativePosition: {
       bottom: TASKBAR_HEIGHT + 11,
       left: 15,
@@ -326,7 +326,7 @@ const directory: Processes = {
       height: 374,
       width: 615,
     },
-    icon: "/System/Icons/xterm.webp",
+    icon: "/System/Icons/olamov-terminal.png",
     libs: [
       "/Program Files/Xterm.js/xterm.css",
       "/Program Files/Xterm.js/xterm.js",
@@ -358,7 +358,7 @@ const directory: Processes = {
       "/Program Files/TinyMCE/icons/default/icons.min.js",
       "/Program Files/TinyMCE/skins/ui/oxide/skin.min.css",
     ],
-    icon: "/System/Icons/tinymce.webp",
+    icon: "/System/Icons/olamov-editor.png",
     libs: ["/Program Files/TinyMCE/tinymce.min.js"],
     title: "TinyMCE",
   },
@@ -371,7 +371,7 @@ const directory: Processes = {
       width: 400,
     },
     dialogProcess: true,
-    icon: "/System/Icons/copying.webp",
+    icon: "/System/Icons/olamov-copying.png",
     title: "",
   },
   V86: {
@@ -384,7 +384,7 @@ const directory: Processes = {
       width: 320,
     },
     dependantLibs: ["/Program Files/Virtual x86/v86.wasm"],
-    icon: "/System/Icons/v86.webp",
+    icon: "/System/Icons/olamov-v86.png",
     libs: ["/Program Files/Virtual x86/libv86.js"],
     preferProcessIcon: true,
     title: "Virtual x86",
@@ -397,7 +397,7 @@ const directory: Processes = {
       height: 390,
       width: 640,
     },
-    icon: "/System/Icons/vlc.webp",
+    icon: "/System/Icons/olamov-video.png",
     libs: [
       "/Program Files/Video.js/video-js.min.css",
       "/Program Files/Video.js/video.min.js",
@@ -413,7 +413,7 @@ const directory: Processes = {
       height: 448,
       width: 595,
     },
-    icon: "/System/Icons/vim.webp",
+    icon: "/System/Icons/olamov-editor.png",
     libs: ["/Program Files/Vim.js/vim.js"],
     singleton: true,
     title: "Vim",
@@ -422,7 +422,7 @@ const directory: Processes = {
     Component: dynamic(() => import("components/apps/Webamp")),
     allowResizing: false,
     hasWindow: false,
-    icon: "/System/Icons/webamp.webp",
+    icon: "/System/Icons/olamov-webamp.png",
     libs: ["/Program Files/Webamp/webamp.bundle.min.js"],
     singleton: true,
     title: "Webamp",

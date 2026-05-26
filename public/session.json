@@ -3,41 +3,25 @@
   "clockSource": "local",
   "closeEffect": "None",
   "iconPositions": {
-    "/Users/Public/Desktop/My Computer.url": {
+    "/Users/Public/Desktop/My PC.url": {
       "gridColumnStart": 1,
       "gridRowStart": 1
     },
-    "/Users/Public/Desktop/Documents": {
+    "/Users/Public/Desktop/Public.url": {
       "gridColumnStart": 1,
       "gridRowStart": 2
     },
-    "/Users/Public/Desktop/Games": {
+    "/Users/Public/Desktop/Blog Posts.url": {
       "gridColumnStart": 1,
       "gridRowStart": 3
     },
-    "/Users/Public/Desktop/Tools": {
-      "gridColumnStart": 2,
-      "gridRowStart": 1
-    },
-    "/Users/Public/Desktop/Research": {
-      "gridColumnStart": 2,
-      "gridRowStart": 2
-    },
-    "/Users/Public/Desktop/Systems": {
-      "gridColumnStart": 2,
-      "gridRowStart": 3
-    },
-    "/Users/Public/Desktop/Experiments": {
-      "gridColumnStart": 3,
-      "gridRowStart": 1
+    "/Users/Public/Desktop/Doom.url": {
+      "gridColumnStart": 1,
+      "gridRowStart": 4
     },
     "/Users/Public/Desktop/Olamov Terminal.url": {
-      "gridColumnStart": 3,
-      "gridRowStart": 2
-    },
-    "/Users/Public/Desktop/Readme.txt": {
-      "gridColumnStart": 3,
-      "gridRowStart": 3
+      "gridColumnStart": 1,
+      "gridRowStart": 5
     }
   },
   "recentFiles": [],
@@ -45,15 +29,11 @@
   "sortOrders": {
     "/Users/Public/Desktop": [
       [
-        "My Computer.url",
-        "Documents",
-        "Games",
-        "Tools",
-        "Research",
-        "Systems",
-        "Experiments",
-        "Olamov Terminal.url",
-        "Readme.txt"
+        "My PC.url",
+        "Public.url",
+        "Blog Posts.url",
+        "Doom.url",
+        "Olamov Terminal.url"
       ]
     ],
     "/Users/Public/Start Menu": [

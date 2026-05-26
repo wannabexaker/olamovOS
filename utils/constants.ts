@@ -212,7 +212,16 @@ export const SHORTCUT_EXTENSION = ".url";
 
 export const SYSTEM_FILES = new Set(["desktop.ini"]);
 
-export const SYSTEM_PATHS = new Set(["/.deletedFiles.log"]);
+export const SYSTEM_PATHS = new Set([
+  "/.deletedFiles.log",
+  "/.index",
+  "/CREDITS.md",
+  "/favicon.ico",
+  "/robots.txt",
+  "/rss.xml",
+  "/session.json",
+  "/sitemap.xml",
+]);
 
 export const DESKTOP_PATH = `${HOME}/Desktop`;
 
@@ -316,17 +325,17 @@ export const SHORTCUT_ICON = `${ICON_PATH}/shortcut.webp`;
 
 export const FAVICON_BASE_PATH = "/favicon.ico";
 
-export const FOLDER_ICON = `${ICON_PATH}/folder.webp`;
+export const FOLDER_ICON = `${ICON_PATH}/olamov-folder.png`;
 
-export const FOLDER_BACK_ICON = `${ICON_PATH}/folder_back.webp`;
+export const FOLDER_BACK_ICON = `${ICON_PATH}/olamov-folder-back.png`;
 
-export const FOLDER_FRONT_ICON = `${ICON_PATH}/folder_front.webp`;
+export const FOLDER_FRONT_ICON = `${ICON_PATH}/olamov-folder-front.png`;
 
 export const COMPRESSED_FOLDER_ICON = `${ICON_PATH}/compressed.webp`;
 
 export const MOUNTED_FOLDER_ICON = `${ICON_PATH}/mounted.webp`;
 
-export const NEW_FOLDER_ICON = `${ICON_PATH}/new_folder.webp`;
+export const NEW_FOLDER_ICON = `${ICON_PATH}/olamov-new-folder.png`;
 
 export const UNKNOWN_ICON_PATH = `${ICON_PATH}/unknown.webp`;
 

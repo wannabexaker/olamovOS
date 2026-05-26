@@ -17,7 +17,7 @@ const START_MENU_PATH = `${HOME}/Start Menu`;
 
 const ICON_PATH = "/System/Icons";
 const SHORTCUT_ICON = `${ICON_PATH}/shortcut.webp`;
-const NEW_FOLDER_ICON = `${ICON_PATH}/new_folder.webp`;
+const NEW_FOLDER_ICON = `${ICON_PATH}/olamov-new-folder.png`;
 
 const USER_ICON_PATH = `${HOME}/Icons`;
 const ICON_CACHE = `${USER_ICON_PATH}/Cache`;

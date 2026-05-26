@@ -150,7 +150,7 @@ const extensions: Record<string, Extension> = {
   ".tic": types.Tic80,
   ".ttf": types.Font,
   ".txt": {
-    icon: "documents",
+    icon: "olamov-monaco",
     process: ["Notepad", ...TEXT_EDITORS],
     type: "Text Document",
   },

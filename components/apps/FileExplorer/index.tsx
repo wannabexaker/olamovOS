@@ -80,7 +80,7 @@ const FileExplorer: FC<ComponentProcessProps> = ({ id }) => {
         } else if (fs) {
           setProcessIcon(
             id,
-            `/System/Icons/${directoryName ? "folder" : "pc"}.webp`
+            directoryName ? FOLDER_ICON : "/System/Icons/olamov-pc.png"
           );
           getIconFromIni(fs, url).then((iconFile) => {
             if (iconFile) setProcessIcon(id, iconFile);
@@ -106,7 +106,7 @@ const FileExplorer: FC<ComponentProcessProps> = ({ id }) => {
   useEffect(() => {
     if (componentWindow && !closing && !url) {
       setProcessUrl(id, "/");
-      setProcessIcon(id, "/System/Icons/pc.webp");
+      setProcessIcon(id, "/System/Icons/olamov-pc.png");
     }
   }, [closing, id, componentWindow, setProcessIcon, setProcessUrl, url]);
 
