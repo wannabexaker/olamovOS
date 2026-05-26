@@ -15,12 +15,12 @@ const types = {
     type: "Application",
   },
   AudioPlaylist: {
-    icon: "audio",
+    icon: "olamov-audio",
     process: ["Webamp"],
     type: "Audio Playlist File",
   },
   ChessGame: {
-    icon: "chess",
+    icon: "olamov-chess",
     process: ["Chess", ...TEXT_EDITORS],
     type: "Portable Game Notation File",
   },
@@ -30,7 +30,7 @@ const types = {
     type: "Disc Image File",
   },
   Emulator: {
-    icon: "emulator",
+    icon: "olamov-emulator",
     process: ["Emulator"],
     type: "Game ROM File",
   },
@@ -52,12 +52,12 @@ const types = {
     type: "HTML Document",
   },
   JsdosBundle: {
-    icon: "jsdos",
+    icon: "olamov-msdos",
     process: ["JSDOS", "FileExplorer"],
     type: "JSDOS Bundle",
   },
   Markdown: {
-    icon: "marked",
+    icon: "olamov-marked",
     process: ["Marked", ...TEXT_EDITORS],
     type: "Markdown File",
   },
@@ -71,11 +71,11 @@ const types = {
     type: "Disc Image File",
   },
   Music: {
-    icon: "audio",
+    icon: "olamov-audio",
     process: ["Webamp", "VideoPlayer"],
   },
   PdfDocument: {
-    icon: "pdf",
+    icon: "olamov-pdf",
     process: ["PDF"],
     type: "PDF Document",
   },
@@ -108,12 +108,12 @@ const types = {
     type: "WebAssembly Module File",
   },
   WinampSkin: {
-    icon: "audio",
+    icon: "olamov-audio",
     process: ["Webamp", "FileExplorer"],
     type: "Winamp Skin File",
   },
   WysiwygHtmlDocument: {
-    icon: "tinymce",
+    icon: "olamov-tinymce",
     process: ["TinyMCE", ...TEXT_EDITORS],
     type: "WYSIWYG HTML File",
   },

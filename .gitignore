@@ -4,6 +4,7 @@ certificates
 dev/
 docs/olamov-app-service-inventory.md
 out
+.wrangler/state/
 
 node_modules
 
