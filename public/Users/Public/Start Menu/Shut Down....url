@@ -1,5 +1,5 @@
 [InternetShortcut]
-BaseURL=Terminal
-Comment=Local shutdown command stub.
+BaseURL=Shutdown
+Comment=Open the classic Olamov OS shutdown dialog.
 IconFile=/System/Icons/olamov-shutdown.png
 URL=shutdown

@@ -22,10 +22,6 @@ const StyledStartMenu = styled(motion.nav)<StyledStartMenuProps>`
   border-style: solid;
   border-width: 2px;
   box-shadow: 2px 2px 0 #0a0010;
-  padding-bottom: ${({ theme }) =>
-    theme.sizes.startMenu.sideBar.buttonHeight / 2}px;
-  padding-left: ${({ theme }) => theme.sizes.startMenu.sideBar.width}px;
-  padding-top: 7px;
 
   ${StyledFileManager} {
     ${ScrollBars(THIN_SCROLLBAR_WIDTH, -2, -1)};
@@ -35,19 +31,11 @@ const StyledStartMenu = styled(motion.nav)<StyledStartMenuProps>`
 
     ${StyledFileEntry} {
       width: ${({ theme }) =>
-        `${
-          theme.sizes.startMenu.size -
-          theme.sizes.startMenu.sideBar.width -
-          THIN_SCROLLBAR_WIDTH
-        }px`};
+        `${theme.sizes.startMenu.size - THIN_SCROLLBAR_WIDTH}px`};
 
       @supports not selector(::-webkit-scrollbar) {
         width: ${({ theme }) =>
-          `${
-            theme.sizes.startMenu.size -
-            theme.sizes.startMenu.sideBar.width -
-            THIN_SCROLLBAR_WIDTH_NON_WEBKIT
-          }px`};
+          `${theme.sizes.startMenu.size - THIN_SCROLLBAR_WIDTH_NON_WEBKIT}px`};
       }
     }
 

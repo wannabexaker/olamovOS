@@ -295,6 +295,21 @@ const directory: Processes = {
     singleton: true,
     title: "Screen Saver",
   },
+  Shutdown: {
+    Component: dynamic(() => import("components/system/Dialogs/Shutdown")),
+    allowResizing: false,
+    backgroundColor: "#c0c0c0",
+    defaultSize: {
+      height: 184,
+      width: 386,
+    },
+    dialogProcess: true,
+    hideMaximizeButton: true,
+    hideMinimizeButton: true,
+    icon: "/System/Icons/olamov-shutdown.png",
+    singleton: true,
+    title: "Shut Down Windows",
+  },
   SpaceCadet: {
     Component: dynamic(() => import("components/apps/SpaceCadet")),
     backgroundColor: "#000",
