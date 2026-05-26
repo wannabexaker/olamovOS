@@ -16,6 +16,7 @@
     "defaults and supports es6 and not ie 11 and >1%"
   ],
   "scripts": {
+    "preinstall": "echo 'node-options=--openssl-legacy-provider' >> ~/.npmrc || true",
     "build": "yarn build:prebuild && next build",
     "build:cloudflare": "NODE_OPTIONS=--openssl-legacy-provider yarn build",
     "build:bundle-analyzer": "yarn build",
