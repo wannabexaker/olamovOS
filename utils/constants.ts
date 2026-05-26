@@ -215,12 +215,7 @@ export const SYSTEM_FILES = new Set(["desktop.ini"]);
 export const SYSTEM_PATHS = new Set([
   "/.deletedFiles.log",
   "/.index",
-  "/CREDITS.md",
-  "/favicon.ico",
-  "/robots.txt",
-  "/rss.xml",
-  "/session.json",
-  "/sitemap.xml",
+  "/_redirects",
 ]);
 
 export const DESKTOP_PATH = `${HOME}/Desktop`;
