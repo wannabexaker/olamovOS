@@ -1258,7 +1258,8 @@ export const notFound = (resource: string): void =>
 export const shouldCaptureDragImage = (
   entryCount: number,
   isDesktop = false
-): boolean => entryCount > 1 || (!isDesktop && entryCount === 1 && isSafari());
+): boolean =>
+  !isDesktop && (entryCount > 1 || (entryCount === 1 && isSafari()));
 
 export const maybeRequestIdleCallback = (
   callback: () => void | Promise<void>

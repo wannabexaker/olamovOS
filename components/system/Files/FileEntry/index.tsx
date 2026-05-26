@@ -52,6 +52,7 @@ import {
   ONE_TIME_PASSIVE_EVENT,
   PREVENT_SCROLL,
   SHORTCUT_EXTENSION,
+  START_MENU_PATH,
   TRANSITIONS_IN_MILLISECONDS,
   USER_ICON_PATH,
   VIDEO_FILE_EXTENSIONS,
@@ -71,6 +72,7 @@ import {
 import { spotlightEffect } from "utils/spotlightEffect";
 import { useIsVisible } from "hooks/useIsVisible";
 import { UNKNOWN_SIZE } from "contexts/fileSystem/core";
+import { useSession } from "contexts/session";
 
 const ColumnRow = dynamic(
   () => import("components/system/Files/FileEntry/ColumnRow")
@@ -157,6 +159,7 @@ const FileEntry: FC<FileEntryProps> = ({
   view,
 }) => {
   const { blurEntry, focusEntry } = focusFunctions;
+  const { setHaltSession } = useSession();
   const { url: changeUrl } = useProcesses();
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const isVisible = useIsVisible(buttonRef, fileManagerRef, isDesktop);
@@ -175,6 +178,7 @@ const FileEntry: FC<FileEntryProps> = ({
     mkdirRecursive,
     pasteList,
     readdir,
+    rootFs,
     stat,
     updateFolder,
     writeFile,
@@ -239,6 +243,14 @@ const FileEntry: FC<FileEntryProps> = ({
   const isIconCached = useRef(false);
   const isDynamicIconLoaded = useRef(false);
   const getIconAbortController = useRef<AbortController>(undefined);
+  const isImmediateShutdown = path === join(START_MENU_PATH, "Shut Down.url");
+  const restartOlamovSession = useCallback(() => {
+    setHaltSession(true);
+
+    import("contexts/fileSystem/functions").then(({ resetStorage }) =>
+      resetStorage(rootFs).finally(() => window.location.reload())
+    );
+  }, [rootFs, setHaltSession]);
   const createTooltip = useCallback(async (): Promise<string> => {
     if (isDirectory) return "";
 
@@ -281,7 +293,9 @@ const FileEntry: FC<FileEntryProps> = ({
   ]);
   const [tooltip, setTooltip] = useState<string>();
   const doubleClickHandler = useCallback(() => {
-    if (
+    if (isImmediateShutdown) {
+      restartOlamovSession();
+    } else if (
       openInFileExplorer &&
       fileManagerId &&
       !window.globalKeyStates?.ctrlKey &&
@@ -299,10 +313,12 @@ const FileEntry: FC<FileEntryProps> = ({
     changeUrl,
     fileManagerId,
     icon,
+    isImmediateShutdown,
     isDynamicIcon,
     listView,
     openFile,
     openInFileExplorer,
+    restartOlamovSession,
     pid,
     url,
     urlExt,

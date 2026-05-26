@@ -30,7 +30,7 @@ const StyledDesktop = styled.main`
   &::after {
     bottom: ${TASKBAR_HEIGHT + 8}px;
     color: #fff;
-    content: "(c) 1999 Olamov Systems.";
+    content: "(c) 1994 Olamov Systems.";
     font-size: 12px;
     left: 8px;
     pointer-events: none;

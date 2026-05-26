@@ -121,8 +121,8 @@ const Sidebar: FC<SidebarProps> = ({ height }) => {
             );
           },
           icon: <Power />,
-          name: "Power",
-          tooltip: "Clears session data and reloads the page.",
+          name: "Shut Down",
+          tooltip: "Clear session data and restart Olamov OS.",
         },
       ].filter(Boolean) as SidebarButtons,
     [buttonAreaCount, collapsed, open, rootFs, setHaltSession]

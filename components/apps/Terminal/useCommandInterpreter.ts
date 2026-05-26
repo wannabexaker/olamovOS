@@ -218,7 +218,7 @@ const useCommandInterpreter = (
             printLn("Olamov OS 1.0");
             printLn("Olamov Universe");
             printLn("systems. intelligence. experiments.");
-            printLn("(c) 1999 Olamov Systems.");
+            printLn("(c) 1994 Olamov Systems.");
             break;
           case "cat":
           case "type": {

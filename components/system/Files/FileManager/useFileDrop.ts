@@ -95,8 +95,17 @@ const useFileDrop = ({
     (event: DragEvent | React.DragEvent<HTMLElement>): void => {
       if (MOUNTABLE_EXTENSIONS.has(getExtension(directory))) return;
 
-      if (event.target instanceof HTMLElement) {
-        if (event.target.closest(".focus-within")?.contains(event.target)) {
+      const dropTarget =
+        event.currentTarget instanceof HTMLElement
+          ? event.currentTarget
+          : event.target instanceof HTMLElement
+            ? event.target
+            : undefined;
+      const eventTarget =
+        event.target instanceof HTMLElement ? event.target : dropTarget;
+
+      if (dropTarget && eventTarget) {
+        if (eventTarget.closest(".focus-within")?.contains(eventTarget)) {
           return;
         }
 
@@ -151,7 +160,7 @@ const useFileDrop = ({
 
             updateIconPositions(
               directory,
-              event.target as HTMLElement,
+              dropTarget,
               iconPositions,
               sortOrders,
               dragPosition,
