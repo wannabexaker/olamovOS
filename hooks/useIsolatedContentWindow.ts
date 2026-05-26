@@ -7,6 +7,7 @@ import {
 } from "react";
 import useFileDrop from "components/system/Files/FileManager/useFileDrop";
 import { PREVENT_SCROLL } from "utils/constants";
+import { useMenu } from "contexts/menu";
 import { useProcesses } from "contexts/process";
 import { useSession } from "contexts/session";
 
@@ -98,6 +99,11 @@ const useIsolatedContentWindow = (
   const { onDragOver, onDrop } = useFileDrop({ id });
   const { processes: { [id]: { maximized } = {} } = {} } = useProcesses();
   const { foregroundId, setForegroundId } = useSession();
+  const { menu } = useMenu();
+  const isContextMenuOpen = useMemo(
+    () => (menu?.items?.length || 0) > 0,
+    [menu]
+  );
   const createContentWindow = useCallback((): ContentWindow | undefined => {
     if (!container) return undefined;
 
@@ -131,7 +137,7 @@ const useIsolatedContentWindow = (
   }, [container, id, onDragOver, onDrop, setForegroundId, styles, withCanvas]);
 
   useLayoutEffect(() => {
-    if (contentWindow && foregroundId === id) {
+    if (contentWindow && foregroundId === id && !isContextMenuOpen) {
       requestAnimationFrame(() => {
         if (focusFunction) focusFunction(contentWindow);
         else if (withCanvas) {
@@ -142,7 +148,15 @@ const useIsolatedContentWindow = (
       });
     }
     // eslint-disable-next-line react-hooks-addons/no-unused-deps
-  }, [contentWindow, focusFunction, foregroundId, id, maximized, withCanvas]);
+  }, [
+    contentWindow,
+    focusFunction,
+    foregroundId,
+    id,
+    isContextMenuOpen,
+    maximized,
+    withCanvas,
+  ]);
 
   useEffect(() => {
     if (!container) {

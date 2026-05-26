@@ -117,7 +117,7 @@ const useTerminal = ({
             // Ignore failure to write to clipboard
           }
         } else {
-          readClipboardToTerminal(newLocalEcho);
+          readClipboardToTerminal(newLocalEcho, terminal);
         }
       };
       const onFocus = (): void => terminal?.textarea?.focus(PREVENT_SCROLL);
@@ -151,7 +151,7 @@ const useTerminal = ({
       currentOnKey = terminal.onKey(
         ({ domEvent: { ctrlKey, code } }: OnKeyEvent) => {
           if (ctrlKey && code === "KeyV") {
-            readClipboardToTerminal(localEcho);
+            readClipboardToTerminal(localEcho, terminal);
           }
         }
       );

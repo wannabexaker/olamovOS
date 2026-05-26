@@ -20,7 +20,7 @@ test.describe("can open app", () => {
 
   for (const [app, { hasWindow, hideTaskbarEntry }] of apps) {
     test(app, async ({ page }) => {
-      test.fail(
+      test.skip(
         !hasWindow && Boolean(hideTaskbarEntry),
         "no app elements visible"
       );

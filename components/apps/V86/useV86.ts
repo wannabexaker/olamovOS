@@ -23,6 +23,7 @@ import { SAVE_PATH, TRANSITIONS_IN_MILLISECONDS } from "utils/constants";
 import {
   bufferToUrl,
   cleanUpBufferUrl,
+  dataUrlToBuffer,
   getExtension,
   getHtmlToImage,
   loadFiles,
@@ -95,12 +96,7 @@ const useV86 = ({
         }
       }
 
-      return screenshot
-        ? Buffer.from(
-            screenshot.replace("data:image/png;base64,", ""),
-            "base64"
-          )
-        : undefined;
+      return screenshot ? dataUrlToBuffer("image/png", screenshot) : undefined;
     },
     [containerRef, emulator]
   );

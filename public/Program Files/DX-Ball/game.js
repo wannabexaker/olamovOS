@@ -84,18 +84,6 @@ window.DXBall = {
               "src",
               window.DXBall.basePath + "/audio/sfx/wav/" + audioName[i] + ".wav"
             ),
-            window.DXBall.audioFiles[audioName[i]]["appendChild"](source),
-            (source = document["createElement"]("source")),
-            source["setAttribute"](
-              "src",
-              window.DXBall.basePath + "/audio/sfx/mp3/" + audioName[i] + ".mp3"
-            ),
-            window.DXBall.audioFiles[audioName[i]]["appendChild"](source),
-            (source = document["createElement"]("source")),
-            source["setAttribute"](
-              "src",
-              window.DXBall.basePath + "/audio/sfx/aac/" + audioName[i] + ".aac"
-            ),
             window.DXBall.audioFiles[audioName[i]]["appendChild"](source)),
         window.DXBall.audioFiles[audioName[i]]["load"]();
     }
@@ -1259,8 +1247,7 @@ window.DXBall = {
           paused = paus = !1,
           window["soundon"] &&
             ((window.DXBall.audioFiles["Whine"]["loop"] = "loop"),
-            (window.DXBall.audioFiles["Voltage"]["loop"] = "loop"),
-            window.DXBall.audioFiles["Whine"]["play"]()),
+            (window.DXBall.audioFiles["Voltage"]["loop"] = "loop")),
           naudio = 0,
           nflash = 0,
           audio = new Array(),

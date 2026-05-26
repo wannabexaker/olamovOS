@@ -14,11 +14,7 @@ const DISK_IMAGE_URL = `/System/${DISK_IMAGE}`;
 test.beforeEach(captureConsoleLogs("apps"));
 test.beforeEach(disableWallpaper);
 
-const EMULATOR_BOOT_TIMEOUT = 30_000;
-
 test.describe("loads disk image", () => {
-  test.describe.configure({ timeout: EMULATOR_BOOT_TIMEOUT * 2 });
-
   for (const deviceMemory of [0.25, 8, 32]) {
     test(`with deviceMemory of ${deviceMemory} GB`, async ({ page }) => {
       await page.addInitScript((memory) => {
@@ -32,8 +28,7 @@ test.describe("loads disk image", () => {
       await windowsAreVisible({ page });
 
       await expect(page.locator(WINDOW_TITLEBAR_SELECTOR)).toContainText(
-        `Virtual x86 - ${DISK_IMAGE}`,
-        { timeout: EMULATOR_BOOT_TIMEOUT }
+        `Virtual x86 - ${DISK_IMAGE}`
       );
     });
   }

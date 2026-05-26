@@ -47,14 +47,7 @@ const Menu: FC<MenuProps> = ({ subMenu }) => {
   const isSubMenu = Boolean(subMenu);
   const offsetCalculated = useRef<Partial<DOMRect>>({});
   const calculateOffset = useCallback(() => {
-    if (
-      !menuRef.current ||
-      (offsetCalculated.current.x === x && offsetCalculated.current.y === y)
-    ) {
-      return;
-    }
-
-    offsetCalculated.current = { x, y };
+    if (!menuRef.current) return;
 
     const {
       height = 0,
@@ -63,6 +56,22 @@ const Menu: FC<MenuProps> = ({ subMenu }) => {
       y: menuY = 0,
     } = menuRef.current?.getBoundingClientRect() || {};
     const [vh, vw] = [viewHeight(), viewWidth()];
+    const offsetToCalculate = {
+      height,
+      vh,
+      vw,
+      width,
+      x,
+      y,
+    };
+    const isOffsetCalculated =
+      JSON.stringify(offsetToCalculate) ===
+      JSON.stringify(offsetCalculated.current);
+
+    if (isOffsetCalculated) return;
+
+    offsetCalculated.current = offsetToCalculate;
+
     const newOffset = { x: 0, y: 0 };
 
     if (!staticX) {

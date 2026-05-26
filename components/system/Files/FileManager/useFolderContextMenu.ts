@@ -34,17 +34,12 @@ import {
   getExtension,
   isFileSystemMappingSupported,
   isFirefox,
+  isGlobalMusicVisualizationRunning,
   isSafari,
+  stopGlobalMusicVisualization,
   updateIconPositions,
 } from "utils/functions";
 import { getMountUrl, isMountedFolder } from "contexts/fileSystem/core";
-
-const stopGlobalMusicVisualization = (): void => {
-  window.WebampGlobal?.store.dispatch({
-    enabled: false,
-    type: "SET_MILKDROP_DESKTOP",
-  });
-};
 
 const NEW_FOLDER = "New folder";
 const NEW_TEXT_DOCUMENT = "New Text Document.txt";
@@ -378,9 +373,7 @@ const useFolderContextMenu = (
           ADD_FILE,
           ...(isFileSystemMappingSupported() ? [MAP_DIRECTORY] : []),
         ];
-        const isMusicVisualizationRunning =
-          document.querySelector("main .webamp-desktop canvas") instanceof
-          HTMLCanvasElement;
+        const isMusicVisualizationRunning = isGlobalMusicVisualizationRunning();
         const mountUrl = getMountUrl(url, rootFs?.mntMap || {});
         const isReadOnly =
           MOUNTABLE_EXTENSIONS.has(getExtension(url)) ||

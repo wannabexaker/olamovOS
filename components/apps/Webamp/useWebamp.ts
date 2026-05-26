@@ -1,4 +1,3 @@
-import { basename } from "path";
 import { type Options, type Track, type URLTrack } from "webamp";
 import { useCallback, useEffect, useRef } from "react";
 import {
@@ -32,7 +31,12 @@ import {
   SAVE_PATH,
   TRANSITIONS_IN_MILLISECONDS,
 } from "utils/constants";
-import { getExtension, haltEvent } from "utils/functions";
+import {
+  dataUrlToBuffer,
+  getExtension,
+  getHtmlToImage,
+  haltEvent,
+} from "utils/functions";
 import { useSnapshots } from "hooks/useSnapshots";
 
 type Webamp = {
@@ -265,21 +269,24 @@ const useWebamp = (id: string): Webamp => {
           createSnapshot(
             SKIN_DATA_NAME,
             Buffer.from(JSON.stringify(data)),
-            async () => {
-              const { skinUrl } =
-                (webamp.options.availableSkins as { skinUrl?: string }[])?.find(
-                  (skin) => skin.skinUrl
-                ) || {};
+            async (): Promise<Buffer | undefined> => {
+              const mainWindow =
+                getWebampElement()?.querySelector<HTMLElement>(MAIN_WINDOW);
 
-              return skinUrl
-                ? Buffer.from(
-                    await (
-                      await fetch(
-                        `https://r2.webampskins.org/screenshots/${basename(skinUrl, ".wsz")}.png`
-                      )
-                    ).arrayBuffer()
-                  )
-                : undefined;
+              if (!mainWindow) return undefined;
+
+              try {
+                const htmlToImage = await getHtmlToImage();
+                const screenshot = await htmlToImage?.toPng(mainWindow, {
+                  skipAutoScale: true,
+                });
+
+                return screenshot
+                  ? dataUrlToBuffer("image/png", screenshot)
+                  : undefined;
+              } catch {
+                return undefined;
+              }
             }
           )
         ),

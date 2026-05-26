@@ -101,6 +101,7 @@ const Titlebar: FC<TitlebarProps> = ({ id }) => {
   >(() => {
     if (componentWindow && componentWindow !== document.activeElement) {
       setForegroundId(id);
+      componentWindow?.focus(PREVENT_SCROLL);
     }
   }, [componentWindow, id, setForegroundId]);
   const onIconClick = useCallback<React.MouseEventHandler<HTMLImageElement>>(

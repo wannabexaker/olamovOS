@@ -38,7 +38,8 @@ export const isSelectionIntersecting = (
 
   return !(
     element.left - containerElement.left >= selectionRect.right ||
-    element.top - containerElement.top >= selectionRect.bottom ||
+    element.top - containerElement.top + containerScrollTop >=
+      selectionRect.bottom ||
     element.right - containerElement.left <= selectionRect.left ||
     element.bottom - containerElement.top + containerScrollTop <=
       selectionRect.top

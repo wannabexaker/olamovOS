@@ -27,11 +27,15 @@ const API_URL = {
   MET_MUSEUM: "https://collectionapi.metmuseum.org/public/collection/v1",
 };
 
-const isResourceOk = async (url: string): Promise<boolean> => {
+const isResourceOk = async (
+  url: string,
+  signal: AbortSignal
+): Promise<boolean> => {
   try {
     const { ok } = await fetch(url, {
       ...HIGH_PRIORITY_REQUEST,
       method: "HEAD",
+      signal,
     });
 
     return ok;
@@ -41,11 +45,11 @@ const isResourceOk = async (url: string): Promise<boolean> => {
 };
 
 const createArtworkHandler =
-  (fetchUrl: () => Promise<string>): WallpaperHandler =>
-  async () => {
+  (fetchUrl: (signal: AbortSignal) => Promise<string>): WallpaperHandler =>
+  async ({ signal }) => {
     const maybeFetchArtwork = async (attempt = 1): Promise<string> => {
       try {
-        const url = await fetchUrl();
+        const url = await fetchUrl(signal);
 
         if (url) return url;
       } catch {
@@ -71,9 +75,10 @@ const createArtworkHandler =
   };
 
 export const wallpaperHandler: Record<string, WallpaperHandler> = {
-  APOD: async ({ isAlt }) => {
+  APOD: async ({ isAlt, signal }) => {
     const response = await jsonFetch(
-      `${API_URL.APOD}?${isAlt ? "count=1&" : ""}api_key=DEMO_KEY`
+      `${API_URL.APOD}?${isAlt ? "count=1&" : ""}api_key=DEMO_KEY`,
+      { signal }
     );
     const { hdurl, url } = (isAlt ? response[0] : response) as ApodResponse;
 
@@ -104,7 +109,7 @@ export const wallpaperHandler: Record<string, WallpaperHandler> = {
       wallpaperUrl,
     };
   },
-  ART_INSTITUTE_OF_CHICAGO: createArtworkHandler(async () => {
+  ART_INSTITUTE_OF_CHICAGO: createArtworkHandler(async (signal) => {
     const { data: [{ image_id } = {}] = [] } =
       await jsonFetch<ArtInstituteOfChicagoResponse>(
         API_URL.ART_INSTITUTE_OF_CHICAGO,
@@ -148,13 +153,14 @@ export const wallpaperHandler: Record<string, WallpaperHandler> = {
             "Content-Type": "application/json",
           },
           method: "POST",
+          signal,
         }
       );
 
     if (image_id) {
       const url = `https://www.artic.edu/iiif/2/${image_id}/full/1686,/0/default.jpg`;
 
-      if (await isResourceOk(url)) return url;
+      if (await isResourceOk(url, signal)) return url;
     }
 
     return "";
@@ -174,11 +180,12 @@ export const wallpaperHandler: Record<string, WallpaperHandler> = {
   MET_MUSEUM: (() => {
     let cachedIds: number[];
 
-    return createArtworkHandler(async () => {
+    return createArtworkHandler(async (signal) => {
       cachedIds ??=
         (
           await jsonFetch<MetMuseumSearchResponse>(
-            `${API_URL.MET_MUSEUM}/search?hasImages=true&departmentId=11&q=*`
+            `${API_URL.MET_MUSEUM}/search?hasImages=true&departmentId=11&q=*`,
+            { signal }
           )
         )?.objectIDs ?? [];
 
@@ -187,12 +194,16 @@ export const wallpaperHandler: Record<string, WallpaperHandler> = {
           cachedIds[Math.floor(Math.random() * cachedIds.length)];
         const { isPublicDomain, primaryImage, primaryImageSmall } =
           await jsonFetch<MetMuseumObjectResponse>(
-            `${API_URL.MET_MUSEUM}/objects/${randomId}`
+            `${API_URL.MET_MUSEUM}/objects/${randomId}`,
+            { signal }
           );
 
         if (isPublicDomain && primaryImage) {
-          if (await isResourceOk(primaryImage)) return primaryImage;
-          if (primaryImageSmall && (await isResourceOk(primaryImageSmall))) {
+          if (await isResourceOk(primaryImage, signal)) return primaryImage;
+          if (
+            primaryImageSmall &&
+            (await isResourceOk(primaryImageSmall, signal))
+          ) {
             return primaryImageSmall;
           }
         }

@@ -240,11 +240,11 @@ export const blobToBuffer = async (blob?: Blob | null): Promise<Buffer> =>
 export const fetchBlob = async (url: string): Promise<Blob> =>
   (await fetch(url)).blob();
 
+export const dataUrlToBuffer = (mimeType: string, dataUrl?: string): Buffer =>
+  Buffer.from(dataUrl?.replace(`data:${mimeType};base64,`, "") || "", "base64");
+
 export const canvasToBuffer = (canvas?: HTMLCanvasElement): Buffer =>
-  Buffer.from(
-    canvas?.toDataURL("image/png").replace("data:image/png;base64,", "") || "",
-    "base64"
-  );
+  dataUrlToBuffer("image/png", canvas?.toDataURL("image/png"));
 
 export const imgDataToBuffer = (imageData: ImageData): Buffer => {
   const canvas = document.createElement("canvas");
@@ -1103,14 +1103,20 @@ const supportsImageSrcSet = (): boolean =>
 export const preloadImage = (
   image: string,
   id?: string,
-  fetchPriority: "auto" | "high" | "low" = "high"
+  deleteExistingElement?: boolean,
+  fetchPriority?: "auto" | "high" | "low",
+  onLoad?: () => void,
+  onError?: () => void
 ): void => {
   const extension = getExtension(image);
   const link = document.createElement("link");
 
   link.as = "image";
-  if (id) link.id = id;
-  link.fetchPriority = fetchPriority;
+  if (id) {
+    if (deleteExistingElement) document.querySelector(`#${id}`)?.remove();
+    link.id = id;
+  }
+  link.fetchPriority = fetchPriority || "high";
   link.rel = "preload";
   link.type = getMimeType(extension);
 
@@ -1125,6 +1131,9 @@ export const preloadImage = (
   } else {
     link.href = image;
   }
+
+  if (onLoad) link.addEventListener("load", onLoad, ONE_TIME_PASSIVE_EVENT);
+  if (onError) link.addEventListener("error", onError, ONE_TIME_PASSIVE_EVENT);
 
   const preloadedLinks = getPreloadedLinks();
 
@@ -1271,3 +1280,13 @@ export const displayVersion = (): string => {
 };
 
 export const isDev = (): boolean => "__nextDevClientId" in window;
+
+export const stopGlobalMusicVisualization = (): void => {
+  window.WebampGlobal?.store?.dispatch?.({
+    enabled: false,
+    type: "SET_MILKDROP_DESKTOP",
+  });
+};
+
+export const isGlobalMusicVisualizationRunning = (): boolean =>
+  window.WebampGlobal?.store?.getState?.()?.milkdrop?.display === "DESKTOP";

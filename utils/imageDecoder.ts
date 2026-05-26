@@ -8,6 +8,7 @@ import {
   blobToBuffer,
   bufferToUrl,
   cleanUpBufferUrl,
+  dataUrlToBuffer,
   getExtension,
   getGifJs,
   getMimeType,
@@ -259,11 +260,9 @@ export const decodeImageToBuffer = async (
     default:
       if (HEIF_IMAGE_FORMATS.has(extension)) return decodeHeic(file);
       if (TIFF_IMAGE_FORMATS.has(extension)) {
-        return Buffer.from(
-          (await import("utif"))
-            .bufferToURI(file)
-            .replace("data:image/png;base64,", ""),
-          "base64"
+        return dataUrlToBuffer(
+          "image/png",
+          (await import("utif")).bufferToURI(file)
         );
       }
   }

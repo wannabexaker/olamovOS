@@ -48,6 +48,7 @@ type WallpaperData = {
 
 export type WallpaperHandler = (props: {
   isAlt: boolean;
+  signal: AbortSignal;
 }) => Promise<WallpaperData> | WallpaperData;
 
 export type ApodResponse = {

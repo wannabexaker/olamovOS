@@ -47,13 +47,16 @@ const TaskbarEntry: FC<TaskbarEntryProps> = ({ icon, id, title }) => {
       200
     );
   }, []);
-  const showPeek = useCallback((): void => {
+  const resetPeekTimer = useCallback(() => {
     if (hidePeekTimerRef.current) {
       window.clearTimeout(hidePeekTimerRef.current);
       hidePeekTimerRef.current = 0;
     }
-    setIsPeekVisible(true);
   }, []);
+  const showPeek = useCallback(() => {
+    resetPeekTimer();
+    setIsPeekVisible(true);
+  }, [resetPeekTimer]);
   const onClick = useCallback<React.MouseEventHandler<HTMLButtonElement>>(
     (event): void => {
       if (event.shiftKey && !singleton) {
@@ -78,6 +81,17 @@ const TaskbarEntry: FC<TaskbarEntryProps> = ({ icon, id, title }) => {
     ]
   );
   const focusable = useMemo(() => (isSafari() ? DIV_BUTTON_PROPS : {}), []);
+  const titlebarContextMenu = useTitlebarContextMenu(id);
+  const onContextMenuCapture = useCallback<
+    React.MouseEventHandler<HTMLElement>
+  >(
+    (event) => {
+      resetPeekTimer();
+      setIsPeekVisible(false);
+      titlebarContextMenu.onContextMenuCapture?.(event);
+    },
+    [resetPeekTimer, titlebarContextMenu]
+  );
 
   return (
     <StyledTaskbarEntry
@@ -87,7 +101,8 @@ const TaskbarEntry: FC<TaskbarEntryProps> = ({ icon, id, title }) => {
       onMouseEnter={showPeek}
       onMouseLeave={hidePeek}
       {...useTaskbarTransition()}
-      {...useTitlebarContextMenu(id)}
+      {...titlebarContextMenu}
+      onContextMenuCapture={onContextMenuCapture}
     >
       <AnimatePresence initial={false} presenceAffectsLayout={false}>
         {isPeekVisible && <PeekWindow id={id} />}
