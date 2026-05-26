@@ -18,7 +18,7 @@
   "scripts": {
     "preinstall": "echo 'node-options=--openssl-legacy-provider' >> ~/.npmrc || true",
     "build": "yarn build:prebuild && next build",
-    "build:cloudflare": "NODE_OPTIONS=--openssl-legacy-provider yarn build",
+    "build:cloudflare": "NODE_OPTIONS=--openssl-legacy-provider yarn build && find out -type f -size +25M -delete",
     "build:bundle-analyzer": "yarn build",
     "build:fs:private": "node scripts/fs2json.js --out public/.index/fs.private.9p.json ./public/private",
     "build:fs:public": "node scripts/fs2json.js --exclude .index,private --out public/.index/fs.9p.json ./public",
