@@ -33,4 +33,14 @@ Cloudflare Pages rejects any single file larger than 25 MB. The `build:cloudflar
 - `Program Files/Quake3/Quake3Game.pk3` (38 MB)
 - `System/ffmpeg/ffmpeg-core.wasm` (30.7 MB)
 
-These apps will not work on the Cloudflare deployment. To restore them, host the large assets externally (R2, S3, etc.) and update the app code to fetch from there.
+These files are hosted on **Cloudflare R2** (bucket: `olamov-os-assets`) and served via the `public/_redirects` file which 301-redirects requests to the R2 public URL:
+
+```
+https://pub-c979d2d712e340268d1028dd89f98dcf.r2.dev
+```
+
+To re-upload assets after changes:
+
+```sh
+npx wrangler r2 object put "olamov-os-assets/<path>" --file="public/<path>" --remote
+```
