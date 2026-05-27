@@ -10,7 +10,7 @@ const StyledSearchButton = styled(StyledTaskbarButton)`
     margin-left: -1px;
 
     path {
-      stroke: #fff;
+      stroke: ${({ theme }) => theme.colors.text};
       stroke-width: 1;
     }
   }

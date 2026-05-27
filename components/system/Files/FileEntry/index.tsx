@@ -93,6 +93,7 @@ type FileEntryProps = {
   focusedEntries: string[];
   hasNewFolderIcon?: boolean;
   hideShortcutIcon?: boolean;
+  initiallyExpanded?: boolean;
   isDesktop?: boolean;
   isHeading?: boolean;
   isLoadingFileManager: boolean;
@@ -142,6 +143,7 @@ const FileEntry: FC<FileEntryProps> = ({
   focusedEntries,
   focusFunctions,
   hideShortcutIcon,
+  initiallyExpanded,
   isDesktop,
   isHeading,
   isLoadingFileManager,
@@ -179,7 +181,9 @@ const FileEntry: FC<FileEntryProps> = ({
     updateFolder,
     writeFile,
   } = useFileSystem();
-  const [showInFileManager, setShowInFileManager] = useState(false);
+  const [showInFileManager, setShowInFileManager] = useState(
+    Boolean(initiallyExpanded)
+  );
   const { formats, sizes } = useTheme();
   const listView = useMemo(() => view === "list", [view]);
   const detailsView = useMemo(() => view === "details", [view]);

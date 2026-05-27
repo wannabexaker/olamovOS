@@ -17,26 +17,108 @@ const StyledStartMenu = styled(motion.nav)<StyledStartMenuProps>`
   ${({ theme }) =>
     TaskbarPanel(theme.sizes.startMenu.maxHeight, theme.sizes.startMenu.size)}
 
-  background: #c0c0c0;
-  border-color: #fff #404040 #404040 #fff;
-  border-style: solid;
-  border-width: 2px;
-  box-shadow: 2px 2px 0 #0a0010;
+  background-color: ${({ theme }) => theme.colors.startMenu.background};
+  border: none;
+  box-shadow:
+    2px 2px 0 #0a0010,
+    inset 1px 1px 0 ${({ theme }) => theme.colors.taskbar.bevelTop},
+    inset -1px -1px 0 ${({ theme }) => theme.colors.taskbar.bevelBottom};
+  padding-left: ${({ theme }) => theme.sizes.startMenu.bandWidth}px;
+
+  .brand-band {
+    background: ${({ theme }) =>
+      `linear-gradient(180deg, ${theme.colors.startMenu.bandBackground} 0%, ${theme.colors.startMenu.bandGradient} 100%)`};
+    bottom: 0;
+    box-shadow: inset -1px 0 0
+      ${({ theme }) => theme.colors.taskbar.bevelBottom};
+    color: ${({ theme }) => theme.colors.startMenu.bandText};
+    display: flex;
+    font-family: Verdana, Tahoma, sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    justify-content: center;
+    left: 0;
+    letter-spacing: 2px;
+    padding-bottom: 12px;
+    position: absolute;
+    top: 0;
+    transform: rotate(180deg);
+    width: ${({ theme }) => theme.sizes.startMenu.bandWidth}px;
+    writing-mode: vertical-rl;
+
+    strong {
+      font-weight: 700;
+    }
+  }
+
+  @supports ((-webkit-backdrop-filter: none) or (backdrop-filter: none)) {
+    background-color: ${({ theme }) => theme.colors.startMenu.background};
+  }
+
+  .search-trigger {
+    align-items: center;
+    background: ${({ theme }) => theme.colors.startMenu.bandBackground};
+    border: none;
+    border-top: 1px solid ${({ theme }) => theme.colors.taskbar.bevelBottom};
+    bottom: 0;
+    box-shadow: inset 0 1px 0 ${({ theme }) => theme.colors.taskbar.bevelTop};
+    color: ${({ theme }) => theme.colors.text};
+    cursor: pointer;
+    display: flex;
+    font-size: 12px;
+    gap: 6px;
+    left: ${({ theme }) => theme.sizes.startMenu.bandWidth}px;
+    padding: 6px 10px;
+    position: absolute;
+    right: 0;
+
+    &:hover {
+      background: ${({ theme }) => theme.colors.startMenu.itemHover};
+    }
+
+    svg {
+      height: 14px;
+      width: 14px;
+    }
+  }
 
   ${StyledFileManager} {
     ${ScrollBars(THIN_SCROLLBAR_WIDTH, -2, -1)};
     margin-top: 0;
     overflow-x: hidden;
-    padding: 4px 0;
+    padding: 4px 0 36px;
 
     ${StyledFileEntry} {
       width: ${({ theme }) =>
-        `${theme.sizes.startMenu.size - THIN_SCROLLBAR_WIDTH}px`};
+        `${
+          theme.sizes.startMenu.size -
+          THIN_SCROLLBAR_WIDTH -
+          theme.sizes.startMenu.bandWidth
+        }px`};
 
       @supports not selector(::-webkit-scrollbar) {
         width: ${({ theme }) =>
-          `${theme.sizes.startMenu.size - THIN_SCROLLBAR_WIDTH_NON_WEBKIT}px`};
+          `${
+            theme.sizes.startMenu.size -
+            THIN_SCROLLBAR_WIDTH_NON_WEBKIT -
+            theme.sizes.startMenu.bandWidth
+          }px`};
       }
+
+      &:hover {
+        background-color: ${({ theme }) => theme.colors.startMenu.itemHover};
+      }
+
+      &:active {
+        background-color: ${({ theme }) => theme.colors.startMenu.itemActive};
+      }
+    }
+
+    ${StyledFileEntry}[data-pinned="true"]:not([data-pinned="true"] ~ [data-pinned="true"]) {
+      border-top: 1px solid ${({ theme }) => theme.colors.taskbar.bevelBottom};
+      box-shadow: inset 0 1px 0 ${({ theme }) => theme.colors.taskbar.bevelTop};
+      margin-top: 4px;
+      padding-top: 4px;
     }
 
     ${StyledFileManager} {

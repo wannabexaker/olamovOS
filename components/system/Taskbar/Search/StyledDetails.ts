@@ -6,8 +6,8 @@ import { THIN_SCROLLBAR_WIDTH } from "utils/constants";
 const StyledDetails = styled.div`
   ${ScrollBars(THIN_SCROLLBAR_WIDTH, -2, -1)}
   ${ThinScrollBars}
-  background-color: rgb(20 20 20 / 95%);
-  border: 8px solid rgb(30 30 30 / 95%);
+  background-color: ${({ theme }) => theme.colors.startMenu.background};
+  border: 8px solid ${({ theme }) => theme.colors.startMenu.bandBackground};
   border-bottom: none;
   box-sizing: content-box;
   display: flex;
@@ -63,7 +63,7 @@ const StyledDetails = styled.div`
 
   table {
     border-collapse: collapse;
-    border-top: 2px solid rgb(161 161 161);
+    border-top: 2px solid ${({ theme }) => theme.colors.highlight};
     display: grid;
     font-size: 12px;
     gap: 10px;
@@ -82,7 +82,7 @@ const StyledDetails = styled.div`
     }
 
     td {
-      color: rgb(208 208 208);
+      color: ${({ theme }) => theme.colors.text};
       padding-right: 5px;
       word-break: break-all;
     }
@@ -92,14 +92,14 @@ const StyledDetails = styled.div`
         text-decoration: underline;
 
         &:hover {
-          color: #fff;
+          color: ${({ theme }) => theme.colors.highlight};
         }
       }
     }
   }
 
   ol {
-    border-top: 2px solid rgb(161 161 161);
+    border-top: 2px solid ${({ theme }) => theme.colors.highlight};
     margin-bottom: 7px;
     margin-top: 15px;
     padding: 10px 0;
@@ -107,14 +107,14 @@ const StyledDetails = styled.div`
 
     li {
       button {
-        color: #fff;
+        color: ${({ theme }) => theme.colors.text};
         display: flex;
         font-size: 12px;
         padding: 8px 18px;
         place-items: start;
 
         svg {
-          fill: #fff;
+          fill: ${({ theme }) => theme.colors.text};
           height: 16px;
           margin-right: 12px;
           width: 16px;
@@ -122,7 +122,7 @@ const StyledDetails = styled.div`
       }
 
       &:hover {
-        background-color: rgb(42 42 42);
+        background-color: ${({ theme }) => theme.colors.startMenu.itemHover};
       }
     }
   }
@@ -139,7 +139,7 @@ const StyledDetails = styled.div`
     width: 32px;
 
     svg {
-      fill: #fff;
+      fill: ${({ theme }) => theme.colors.text};
       height: 18px;
       margin-right: 2px;
       transform: scaleX(-1);
@@ -147,7 +147,7 @@ const StyledDetails = styled.div`
     }
 
     &:hover {
-      background-color: rgb(255 255 255 / 20%);
+      background-color: ${({ theme }) => theme.colors.startMenu.itemHover};
     }
   }
 `;

@@ -42,9 +42,11 @@ type FileManagerProps = {
   hideScrolling?: boolean;
   hideShortcutIcons?: boolean;
   id?: string;
+  initiallyExpanded?: readonly string[];
   isDesktop?: boolean;
   isStartMenu?: boolean;
   loadIconsImmediately?: boolean;
+  pinToBottom?: readonly string[];
   readOnly?: boolean;
   showStatusBar?: boolean;
   skipFsWatcher?: boolean;
@@ -61,9 +63,11 @@ const FileManager: FC<FileManagerProps> = ({
   hideScrolling,
   hideShortcutIcons,
   id,
+  initiallyExpanded,
   isDesktop,
   isStartMenu,
   loadIconsImmediately,
+  pinToBottom,
   readOnly,
   showStatusBar,
   skipFsWatcher,
@@ -156,6 +160,21 @@ const FileManager: FC<FileManagerProps> = ({
     [keyShortcuts, renaming]
   );
   const fileKeys = useMemo(() => Object.keys(files), [files]);
+  const orderedFileKeys = useMemo(() => {
+    if (!pinToBottom || pinToBottom.length === 0) return fileKeys;
+
+    const pinSet = new Set(pinToBottom);
+    const isPinned = (file: string): boolean =>
+      pinSet.has(basename(file, SHORTCUT_EXTENSION));
+    const unpinned = fileKeys.filter((file) => !isPinned(file));
+    const pinned = pinToBottom
+      .map((name) =>
+        fileKeys.find((file) => basename(file, SHORTCUT_EXTENSION) === name)
+      )
+      .filter((file): file is string => file !== undefined);
+
+    return [...unpinned, ...pinned];
+  }, [fileKeys, pinToBottom]);
   const isEmptyFolder = useMemo(
     () => !isDesktop && !isStartMenu && !loading && fileKeys.length === 0,
     [fileKeys.length, isDesktop, isStartMenu, loading]
@@ -269,40 +288,49 @@ const FileManager: FC<FileManagerProps> = ({
         {!loading && (
           <>
             {isSelecting && <StyledSelection style={selectionStyling} />}
-            {fileKeys.map((file) => (
-              <StyledFileEntry
-                key={file}
-                $desktop={isDesktop}
-                $selecting={isSelecting}
-                $visible={!isLoading}
-                {...(!readOnly && draggableEntry(url, file, renaming === file))}
-                {...(renaming === "" && { onKeyDown: keyShortcuts(file) })}
-                {...focusableEntry(file)}
-              >
-                <FileEntry
-                  columns={columns}
-                  fileActions={fileActions}
-                  fileManagerId={id}
-                  fileManagerRef={fileManagerRef}
-                  focusFunctions={focusFunctions}
-                  focusedEntries={focusedEntries}
-                  hasNewFolderIcon={isStartMenu}
-                  hideShortcutIcon={hideShortcutIcons}
-                  isDesktop={isDesktop}
-                  isHeading={isDesktop && files[file].systemShortcut}
-                  isLoadingFileManager={isLoading}
-                  loadIconImmediately={loadIconsImmediately}
-                  name={basename(file, SHORTCUT_EXTENSION)}
-                  path={join(url, file)}
-                  readOnly={readOnly}
-                  renaming={renaming === file}
-                  selectionRect={selectionRect}
-                  setRenaming={setRenaming}
-                  stats={files[file]}
-                  view={view}
-                />
-              </StyledFileEntry>
-            ))}
+            {orderedFileKeys.map((file) => {
+              const name = basename(file, SHORTCUT_EXTENSION);
+
+              return (
+                <StyledFileEntry
+                  key={file}
+                  $desktop={isDesktop}
+                  $selecting={isSelecting}
+                  $visible={!isLoading}
+                  data-pinned={pinToBottom?.includes(name) ? "true" : undefined}
+                  {...(!readOnly &&
+                    draggableEntry(url, file, renaming === file))}
+                  {...(renaming === "" && { onKeyDown: keyShortcuts(file) })}
+                  {...focusableEntry(file)}
+                >
+                  <FileEntry
+                    columns={columns}
+                    fileActions={fileActions}
+                    fileManagerId={id}
+                    fileManagerRef={fileManagerRef}
+                    focusFunctions={focusFunctions}
+                    focusedEntries={focusedEntries}
+                    hasNewFolderIcon={isStartMenu}
+                    hideShortcutIcon={hideShortcutIcons}
+                    initiallyExpanded={
+                      isStartMenu && initiallyExpanded?.includes(name)
+                    }
+                    isDesktop={isDesktop}
+                    isHeading={isDesktop && files[file].systemShortcut}
+                    isLoadingFileManager={isLoading}
+                    loadIconImmediately={loadIconsImmediately}
+                    name={name}
+                    path={join(url, file)}
+                    readOnly={readOnly}
+                    renaming={renaming === file}
+                    selectionRect={selectionRect}
+                    setRenaming={setRenaming}
+                    stats={files[file]}
+                    view={view}
+                  />
+                </StyledFileEntry>
+              );
+            })}
           </>
         )}
       </StyledFileManager>

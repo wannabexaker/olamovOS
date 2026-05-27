@@ -44,6 +44,7 @@ const sizes = {
     size: 600,
   },
   startMenu: {
+    bandWidth: 28,
     maxHeight: 390,
     sideBar: {
       buttonHeight: 48,

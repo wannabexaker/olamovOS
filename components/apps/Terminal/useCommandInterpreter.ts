@@ -16,10 +16,12 @@ import {
   aliases,
   autoComplete,
   commands,
+  FFMPEG_USAGE,
   formatToExtension,
   getFreeSpace,
   getUptime,
   help,
+  IMAGEMAGICK_USAGE,
   parseCommand,
   printColor,
   printTable,
@@ -75,6 +77,7 @@ import { analyzeFileToText } from "utils/mediainfo";
 const COMMAND_NOT_SUPPORTED = "The system does not support the command.";
 const FILE_NOT_FILE = "The system cannot find the file specified.";
 const PATH_NOT_FOUND = "The system cannot find the path specified.";
+const PING_REQUEST_TIMEOUT = 5 * MILLISECONDS_IN_SECOND;
 const SYNTAX_ERROR = "The syntax of the command is incorrect.";
 
 const { alias } = PACKAGE_DATA;
@@ -220,6 +223,65 @@ const useCommandInterpreter = (
             printLn("systems. intelligence. experiments.");
             printLn("(c) 1994 Olamov Systems.");
             break;
+          case "olamov": {
+            const subCommand = (commandArgs[0] || "help").toLowerCase();
+
+            switch (subCommand) {
+              case "version":
+                printLn(`Olamov OS ${displayVersion()}`);
+                break;
+              case "created":
+              case "since":
+                printLn("Olamov Systems - fictional brand year: 1994");
+                printLn("Project repository started: 2021-01-02");
+                break;
+              case "features":
+              case "readme":
+                printLn(
+                  "Olamov OS - a purple retro desktop universe in the browser."
+                );
+                printLn("");
+                printLn("Capabilities:");
+                printLn(
+                  "  - 30+ classic-style apps (Browser, Paint, Marked, Webamp, Vim, ...)"
+                );
+                printLn(
+                  "  - Emulators: BoxedWine, EmulatorJS, JSDOS, Ruffle, TIC-80, V86"
+                );
+                printLn(
+                  "  - Games: Chess, ClassiCube, DX-Ball, Quake III Arena, Space Cadet, Chrome Dino"
+                );
+                printLn("  - olamovStream - YouTube embed player");
+                printLn(
+                  "  - Terminal with WASM ffmpeg, imagemagick, Python (QuickJS), git"
+                );
+                printLn("  - Persistent virtual filesystem (IndexedDB)");
+                printLn("");
+                printLn(
+                  "Visual identity: cosmic dark purple, Win2000 bevels, Win98 layout."
+                );
+                printLn("");
+                printLn(
+                  "More: see README.md in the repository, or visit https://olamov.com"
+                );
+                break;
+              default:
+                printLn("Olamov OS - system info command");
+                printLn("");
+                printLn("Usage: olamov <subcommand>");
+                printLn("");
+                printLn("Subcommands:");
+                printLn("  version   Show the OS version");
+                printLn(
+                  "  created   Show the project's brand year and repo start date"
+                );
+                printLn("  readme    Show capabilities summary");
+                printLn("  features  Alias of readme");
+                printLn("  help      Show this message");
+            }
+
+            break;
+          }
           case "cat":
           case "type": {
             const [file] = commandArgs;
@@ -559,7 +621,10 @@ const useCommandInterpreter = (
                 printLn(FILE_NOT_FILE);
               }
             } else {
-              printLn(SYNTAX_ERROR);
+              const usage =
+                lcBaseCommand === "ffmpeg" ? FFMPEG_USAGE : IMAGEMAGICK_USAGE;
+
+              usage.forEach((line) => printLn(line));
             }
             break;
           }
@@ -639,6 +704,102 @@ const useCommandInterpreter = (
                 isValidIp(ip) ? ip : "Unknown"
               }`
             );
+            break;
+          }
+          case "ping": {
+            const [target, countArg] = commandArgs;
+
+            if (!target) {
+              printLn("Usage: ping <hostname> [count]");
+              printLn("");
+              printLn("Sends timed HTTPS HEAD requests to the target host.");
+              printLn(
+                "Default count is 4. Note: this measures HTTPS round-trip,"
+              );
+              printLn("not ICMP - browsers cannot send raw ICMP packets.");
+              break;
+            }
+
+            const count = Math.max(
+              1,
+              Math.min(20, Number.parseInt(countArg, 10) || 4)
+            );
+            const url =
+              target.startsWith("http://") || target.startsWith("https://")
+                ? target
+                : `https://${target}`;
+
+            printLn(`Pinging ${target} via HTTPS HEAD (${count} requests):`);
+            printLn("");
+
+            const samples: number[] = [];
+
+            const pingRequest = async (index: number): Promise<void> => {
+              const startedAt = performance.now();
+              const abortController = new AbortController();
+              const timeoutId = window.setTimeout(
+                () => abortController.abort(),
+                PING_REQUEST_TIMEOUT
+              );
+
+              try {
+                await fetch(url, {
+                  cache: "no-store",
+                  method: "HEAD",
+                  mode: "no-cors",
+                  signal: abortController.signal,
+                });
+
+                const elapsed = performance.now() - startedAt;
+
+                samples.push(elapsed);
+                printLn(
+                  `  reply from ${target}: time=${elapsed.toFixed(1)} ms`
+                );
+              } catch {
+                printLn(`  request to ${target} failed.`);
+              } finally {
+                window.clearTimeout(timeoutId);
+              }
+
+              if (index < count - 1) {
+                await new Promise<void>((resolve) => {
+                  window.setTimeout(resolve, MILLISECONDS_IN_SECOND);
+                });
+              }
+            };
+
+            await Array.from({ length: count }).reduce<Promise<void>>(
+              async (previousRequest, _unused, index) => {
+                await previousRequest;
+                await pingRequest(index);
+              },
+              Promise.resolve()
+            );
+
+            printLn("");
+
+            if (samples.length === 0) {
+              printLn(`No successful responses from ${target}.`);
+            } else {
+              const min = Math.min(...samples);
+              const max = Math.max(...samples);
+              const avg =
+                samples.reduce((acc, sample) => acc + sample, 0) /
+                samples.length;
+
+              printLn(
+                `Statistics: sent=${count} received=${samples.length} lost=${
+                  count - samples.length
+                }`
+              );
+              printLn(
+                `Round-trip: min=${min.toFixed(1)}ms max=${max.toFixed(
+                  1
+                )}ms avg=${avg.toFixed(1)}ms`
+              );
+            }
+
             break;
           }
           case "kill":

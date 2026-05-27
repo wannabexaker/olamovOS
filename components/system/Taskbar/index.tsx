@@ -1,10 +1,11 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { AnimatePresence } from "motion/react";
 import {
   importAIButton,
   importAIChat,
   importCalendar,
+  importSearch,
   importStartMenu,
 } from "components/system/Taskbar/functions";
 import Clock from "components/system/Taskbar/Clock";
@@ -19,10 +20,12 @@ import { useSession } from "contexts/session";
 const AIButton = dynamic(importAIButton);
 const AIChat = dynamic(importAIChat);
 const Calendar = dynamic(importCalendar);
+const Search = dynamic(importSearch);
 const StartMenu = dynamic(importStartMenu);
 
 const Taskbar: FC = () => {
   const [startMenuVisible, setStartMenuVisible] = useState(false);
+  const [searchVisible, setSearchVisible] = useState(false);
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [aiVisible, setAIVisible] = useState(false);
   const [clockWidth, setClockWidth] = useState(CLOCK_CANVAS_BASE_WIDTH);
@@ -31,6 +34,13 @@ const Taskbar: FC = () => {
   const toggleStartMenu = useCallback(
     (showMenu?: boolean): void =>
       setStartMenuVisible((currentMenuState) => showMenu ?? !currentMenuState),
+    []
+  );
+  const toggleSearch = useCallback(
+    (showSearch?: boolean): void =>
+      setSearchVisible(
+        (currentSearchState) => showSearch ?? !currentSearchState
+      ),
     []
   );
   const toggleCalendar = useCallback(
@@ -47,12 +57,25 @@ const Taskbar: FC = () => {
   );
   const hasAI = hasWindowAI || aiEnabled;
 
+  useEffect(() => {
+    const closeSearch = (): void => toggleSearch(false);
+
+    window.addEventListener("olamov:close-search", closeSearch);
+
+    return () => window.removeEventListener("olamov:close-search", closeSearch);
+  }, [toggleSearch]);
+
   return (
     <>
       <AnimatePresence initial={false} presenceAffectsLayout={false}>
         {startMenuVisible && (
-          <StartMenu key="startMenu" toggleStartMenu={toggleStartMenu} />
+          <StartMenu
+            key="startMenu"
+            toggleSearch={toggleSearch}
+            toggleStartMenu={toggleStartMenu}
+          />
         )}
+        {searchVisible && <Search key="search" toggleSearch={toggleSearch} />}
       </AnimatePresence>
       <StyledTaskbar {...useTaskbarContextMenu()} {...FOCUSABLE_ELEMENT}>
         <StartButton

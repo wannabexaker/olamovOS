@@ -34,6 +34,11 @@ const StyledTaskbarEntry = styled(motion.li)<StyledTaskbarEntryProps>`
         }
       `};
     bottom: 0;
+    box-shadow: ${({ $foreground, theme }) =>
+      $foreground
+        ? `inset 1px 1px 0 ${theme.colors.taskbar.bevelBottom},
+           inset -1px -1px 0 ${theme.colors.taskbar.bevelTop}`
+        : "none"};
     content: "";
     height: ${({ $foreground }) => ($foreground ? "100%" : 0)};
     margin: ${({ $foreground }) => ($foreground ? "" : "0 4px")};

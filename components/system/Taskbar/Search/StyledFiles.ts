@@ -10,8 +10,8 @@ const StyledFiles = styled.figure`
     padding-top: 9px;
 
     li {
-      background-color: rgb(60 60 60 / 85%);
-      border: 1px solid rgb(75 75 75 / 85%);
+      background-color: ${({ theme }) => theme.colors.startMenu.bandBackground};
+      border: 1px solid ${({ theme }) => theme.colors.taskbar.bevelTop};
       border-radius: 15px;
       display: flex;
       padding: 4px 10px;
@@ -41,7 +41,7 @@ const StyledFiles = styled.figure`
       }
 
       &:hover {
-        background-color: rgb(80 80 80 / 85%);
+        background-color: ${({ theme }) => theme.colors.startMenu.itemHover};
       }
     }
   }
