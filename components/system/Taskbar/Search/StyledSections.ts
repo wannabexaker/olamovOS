@@ -10,7 +10,7 @@ type StyledSectionsProps = {
 const StyledSections = styled.div<StyledSectionsProps>`
   ${ScrollBars(THIN_SCROLLBAR_WIDTH, -2, -1)}
   ${ThinScrollBars}
-  color: #fff;
+  color: ${({ theme }) => theme.colors.text};
   display: flex;
   height: ${({ theme }) =>
     `calc(100% - ${theme.sizes.search.headerHeight}px - ${theme.sizes.search.inputHeight}px)`};
@@ -54,7 +54,7 @@ const StyledSections = styled.div<StyledSectionsProps>`
     font-weight: 600;
 
     svg {
-      fill: #fff;
+      fill: ${({ theme }) => theme.colors.text};
       height: 16px;
       margin-bottom: -3px;
       margin-right: 6px;
@@ -63,7 +63,7 @@ const StyledSections = styled.div<StyledSectionsProps>`
   }
 
   figure.card {
-    background-color: rgb(45 45 45 / 60%);
+    background-color: ${({ theme }) => theme.colors.startMenu.bandBackground};
     border-radius: 5px;
     padding: 8px 12px;
 
@@ -90,7 +90,7 @@ const StyledSections = styled.div<StyledSectionsProps>`
         text-align: left;
 
         img {
-          background-color: rgb(60 60 60 / 85%);
+          background-color: ${({ theme }) => theme.colors.startMenu.background};
           border-radius: 5px;
           margin-bottom: 4px;
           min-height: 80px;
@@ -100,7 +100,8 @@ const StyledSections = styled.div<StyledSectionsProps>`
           user-select: all;
 
           &:hover {
-            background-color: rgb(16 88 145 / 85%);
+            background-color: ${({ theme }) =>
+              theme.colors.startMenu.itemHover};
           }
         }
 

@@ -8,6 +8,8 @@ type StyledClockProps = {
 };
 
 const StyledClock = styled.div<StyledClockProps>`
+  border-left: 1px solid ${({ theme }) => theme.colors.taskbar.bevelBottom};
+  box-shadow: inset 1px 0 0 ${({ theme }) => theme.colors.taskbar.bevelTop};
   color: ${({ theme }) => theme.colors.text};
   display: flex;
   font-size: ${({ theme }) => theme.sizes.clock.fontSize};

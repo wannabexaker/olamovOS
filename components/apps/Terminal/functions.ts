@@ -52,6 +52,8 @@ export const commands: Record<string, string> = {
   move: "Moves file or directory.",
   neofetch: "Displays system information.",
   nslookup: "Displays DNS information about a domain.",
+  olamov: "Displays Olamov OS metadata.",
+  ping: "Sends timed HTTPS HEAD requests to a host.",
   pwd: "Prints the working directory.",
   python: "Run code through Python interpreter.",
   qjs: "Run code through QuickJS interpreter.",
@@ -74,6 +76,33 @@ export const commands: Record<string, string> = {
   wsl: "Launches the default Linux shell.",
   xlsx: "Convert a spreadsheet file to another format.",
 };
+
+export const FFMPEG_USAGE = [
+  "Usage: ffmpeg <input-file> <output-format>",
+  "",
+  "Convert media files using the bundled FFmpeg WASM build.",
+  "",
+  "Examples:",
+  "  ffmpeg movie.mp4 webm",
+  "  ffmpeg song.wav mp3",
+  "  ffmpeg clip.mov gif",
+  "",
+  "Supported output formats: aac, avi, gif, mkv, mp3, mp4, ogg, ogv, wav, webm.",
+  "The output file is written next to the input.",
+];
+
+export const IMAGEMAGICK_USAGE = [
+  "Usage: imagemagick <input-file> <output-format>",
+  "",
+  "Convert images using the bundled ImageMagick WASM build.",
+  "",
+  "Examples:",
+  "  imagemagick photo.png jpg",
+  "  imagemagick logo.svg png",
+  "",
+  "Supported output formats: bmp, gif, jpg, png, psd, svg, tiff.",
+  "The output file is written next to the input.",
+];
 
 export const aliases: Record<string, string[]> = {
   cd: ["chdir"],

@@ -18,6 +18,11 @@ const StyledSearch = styled(motion.nav)<StyledSearchProps>`
     )}
 
   backdrop-filter: ${({ theme }) => `blur(${theme.sizes.taskbar.panelBlur})`};
+  background-color: ${({ theme }) => theme.colors.startMenu.background};
+
+  @supports ((-webkit-backdrop-filter: none) or (backdrop-filter: none)) {
+    background-color: ${({ theme }) => theme.colors.startMenu.background};
+  }
 
   @keyframes fade-in {
     0% {
@@ -34,10 +39,11 @@ const StyledSearch = styled(motion.nav)<StyledSearchProps>`
 
     input {
       appearance: none;
-      background-color: #fff;
-      border: 2px solid rgb(0 120 215);
+      background-color: ${({ theme }) => theme.colors.startMenu.bandBackground};
+      border: 2px solid ${({ theme }) => theme.colors.highlight};
       border-radius: 0;
-      color: #000;
+      caret-color: ${({ theme }) => theme.colors.highlight};
+      color: ${({ theme }) => theme.colors.text};
       font-size: 15px;
       height: 40px;
       padding: 10px;
@@ -45,10 +51,10 @@ const StyledSearch = styled(motion.nav)<StyledSearchProps>`
       width: 100%;
 
       &::placeholder {
-        color: #000;
+        color: ${({ theme }) => theme.colors.text};
         inset: 0;
         left: 37px;
-        opacity: 100%;
+        opacity: 70%;
         overflow: visible;
       }
 
@@ -81,7 +87,7 @@ const StyledSearch = styled(motion.nav)<StyledSearchProps>`
       user-select: none;
 
       svg {
-        fill: #fff;
+        fill: ${({ theme }) => theme.colors.text};
         height: 32px;
         margin-right: 12px;
         width: 32px;
@@ -89,7 +95,7 @@ const StyledSearch = styled(motion.nav)<StyledSearchProps>`
     }
 
     .tab {
-      color: rgb(175 175 175);
+      color: ${({ theme }) => theme.colors.text};
       display: flex;
       flex-direction: column;
       height: ${({ theme }) =>
@@ -113,7 +119,7 @@ const StyledSearch = styled(motion.nav)<StyledSearchProps>`
       }
 
       svg {
-        fill: rgb(115 115 115);
+        fill: ${({ theme }) => theme.colors.highlight};
         height: 128px;
         width: 128px;
       }
@@ -125,11 +131,11 @@ const StyledSearch = styled(motion.nav)<StyledSearchProps>`
       top: 15px;
 
       .close-button svg {
-        fill: rgb(200 200 200);
+        fill: ${({ theme }) => theme.colors.text};
         height: 14px;
 
         &:hover {
-          fill: #fff;
+          fill: ${({ theme }) => theme.colors.highlight};
         }
       }
     }

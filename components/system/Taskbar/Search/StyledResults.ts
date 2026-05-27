@@ -4,7 +4,7 @@ import ScrollBars from "styles/common/ScrollBars";
 import { THIN_SCROLLBAR_WIDTH } from "utils/constants";
 
 const StyledResults = styled.div`
-  color: #fff;
+  color: ${({ theme }) => theme.colors.text};
   display: flex;
   height: ${({ theme }) =>
     `calc(100% - ${theme.sizes.search.headerHeight}px - ${theme.sizes.search.inputHeight}px)`};
@@ -15,14 +15,14 @@ const StyledResults = styled.div`
   .list {
     ${ScrollBars(THIN_SCROLLBAR_WIDTH, -2, -1)}
     ${ThinScrollBars}
-    background-color: rgb(40 40 40 / 95%);
+    background-color: ${({ theme }) => theme.colors.startMenu.background};
     overflow-y: auto;
     scrollbar-gutter: auto;
     width: 100%;
 
     li {
       &.active-item {
-        background-color: rgb(30 80 115 / 75%);
+        background-color: ${({ theme }) => theme.colors.startMenu.itemActive};
       }
 
       position: relative;
@@ -110,33 +110,36 @@ const StyledResults = styled.div`
         width: 26px;
 
         svg {
-          fill: #fff;
+          fill: ${({ theme }) => theme.colors.text};
           height: 16px;
           width: 16px;
         }
       }
 
       &:hover {
-        background-color: rgb(100 100 100 / 95%);
+        background-color: ${({ theme }) => theme.colors.startMenu.itemHover};
 
         div.select {
-          background-color: rgb(60 60 60 / 95%);
-          border-left: 1px solid rgb(40 40 40 / 95%);
+          background-color: ${({ theme }) =>
+            theme.colors.startMenu.bandBackground};
+          border-left: 1px solid
+            ${({ theme }) => theme.colors.taskbar.bevelBottom};
         }
 
         figure {
           &:not(:hover) {
-            background-color: rgb(60 60 60 / 95%);
+            background-color: ${({ theme }) =>
+              theme.colors.startMenu.bandBackground};
           }
         }
 
         &.active-item {
-          background-color: rgb(16 88 145 / 95%);
+          background-color: ${({ theme }) => theme.colors.startMenu.itemActive};
         }
       }
 
       div.select:hover {
-        background-color: rgb(100 100 100 / 95%);
+        background-color: ${({ theme }) => theme.colors.startMenu.itemHover};
       }
     }
   }

@@ -2,6 +2,7 @@ import { useTheme } from "styled-components";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FileManager from "components/system/Files/FileManager";
 import StyledStartMenu from "components/system/StartMenu/StyledStartMenu";
+import { Search as SearchIcon } from "components/apps/FileExplorer/NavigationIcons";
 import { updateInputValueOnReactElement } from "components/system/Taskbar/Search/functions";
 import {
   SEARCH_BUTTON_TITLE,
@@ -16,13 +17,13 @@ import {
   THIN_SCROLLBAR_WIDTH,
   THIN_SCROLLBAR_WIDTH_NON_WEBKIT,
 } from "utils/constants";
-import { getNavButtonByTitle } from "hooks/useGlobalKeyboardShortcuts";
 
 type StartMenuProps = {
+  toggleSearch: (showMenu?: boolean) => void;
   toggleStartMenu: (showMenu?: boolean) => void;
 };
 
-const StartMenu: FC<StartMenuProps> = ({ toggleStartMenu }) => {
+const StartMenu: FC<StartMenuProps> = ({ toggleSearch, toggleStartMenu }) => {
   const menuRef = useRef<HTMLElement | null>(null);
   const {
     sizes: { startMenu },
@@ -48,6 +49,10 @@ const StartMenu: FC<StartMenuProps> = ({ toggleStartMenu }) => {
     element?.focus(PREVENT_SCROLL);
     menuRef.current = element;
   }, []);
+  const openSearch = useCallback(() => {
+    toggleSearch(true);
+    toggleStartMenu(false);
+  }, [toggleSearch, toggleStartMenu]);
   const startMenuTransition = useTaskbarItemTransition(startMenu.maxHeight);
 
   useEffect(() => {
@@ -77,27 +82,22 @@ const StartMenu: FC<StartMenuProps> = ({ toggleStartMenu }) => {
         if (key === "Escape") toggleStartMenu(false);
         else if (key.length === 1) {
           toggleStartMenu(false);
+          toggleSearch(true);
 
-          const searchButton = getNavButtonByTitle(SEARCH_BUTTON_TITLE);
+          let tries = 0;
+          const openSearchTimerRef = window.setInterval(() => {
+            const searchInput = document.querySelector<HTMLInputElement>(
+              "main > nav .search > input"
+            );
 
-          if (searchButton) {
-            searchButton.click();
+            if (searchInput) {
+              updateInputValueOnReactElement(searchInput, key);
+            }
 
-            let tries = 0;
-            const openSearchTimerRef = window.setInterval(() => {
-              const searchInput = document.querySelector<HTMLInputElement>(
-                "main > nav .search > input"
-              );
-
-              if (searchInput) {
-                updateInputValueOnReactElement(searchInput, key);
-              }
-
-              if (searchInput || ++tries > 10) {
-                window.clearInterval(openSearchTimerRef);
-              }
-            }, 50);
-          }
+            if (searchInput || ++tries > 10) {
+              window.clearInterval(openSearchTimerRef);
+            }
+          }, 50);
         }
       }}
       onMouseLeave={() => setShowScrolling(false)}
@@ -105,7 +105,14 @@ const StartMenu: FC<StartMenuProps> = ({ toggleStartMenu }) => {
       {...startMenuTransition}
       {...FOCUSABLE_ELEMENT}
     >
+      <aside aria-hidden="true" className="brand-band">
+        <strong>Olamov</strong> 1994 <strong>Universe</strong>
+      </aside>
       <FileManager
+        initiallyExpanded={
+          ["Programs"] /* Phase 4: auto-expand Programs folder */
+        }
+        pinToBottom={["Run...", "Shut Down..."]}
         url={START_MENU_PATH}
         hideLoading
         hideShortcutIcons
@@ -115,6 +122,15 @@ const StartMenu: FC<StartMenuProps> = ({ toggleStartMenu }) => {
         skipFsWatcher
         skipSorting
       />
+      <button
+        className="search-trigger"
+        onClick={openSearch}
+        title={SEARCH_BUTTON_TITLE}
+        type="button"
+      >
+        <SearchIcon />
+        Search
+      </button>
     </StyledStartMenu>
   );
 };

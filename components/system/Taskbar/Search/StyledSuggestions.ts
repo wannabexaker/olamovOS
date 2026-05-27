@@ -29,7 +29,7 @@ const StyledSuggestions = styled.ol`
     }
 
     &::before {
-      border-top: 1px solid rgb(80 80 80 / 55%);
+      border-top: 1px solid ${({ theme }) => theme.colors.taskbar.bevelBottom};
       content: "";
       height: 100%;
       position: absolute;
@@ -43,7 +43,7 @@ const StyledSuggestions = styled.ol`
     }
 
     &:hover {
-      background-color: rgb(80 80 80 / 75%);
+      background-color: ${({ theme }) => theme.colors.startMenu.itemHover};
 
       &::before {
         border: none;
