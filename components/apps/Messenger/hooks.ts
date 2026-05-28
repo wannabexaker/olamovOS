@@ -12,6 +12,8 @@ import { useMessageContext } from "components/apps/Messenger/MessageContext";
 import { useNostr } from "components/apps/Messenger/NostrContext";
 import {
   BASE_NIP05_URL,
+  CONTACTS_ALLOWLIST_KEY,
+  CONTACTS_BLOCKLIST_KEY,
   METADATA_KIND,
   NOTIFICATION_SOUND,
   SEEN_EVENTS_DEBOUNCE_MS,
@@ -273,4 +275,66 @@ export const useNostrProfile = (
   useNostrEvents(profileFilter);
 
   return publicKey ? profiles[publicKey] || dataToProfile(publicKey) : {};
+};
+
+export const useAllowlist = (): {
+  allow: (hex: string) => void;
+  allowed: Set<string>;
+  isAllowed: (hex: string) => boolean;
+} => {
+  const [allowed, setAllowed] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(CONTACTS_ALLOWLIST_KEY) || "[]";
+
+      return new Set(JSON.parse(raw) as string[]);
+    } catch {
+      return new Set();
+    }
+  });
+  const allow = useCallback((hex: string) => {
+    setAllowed((prev) => {
+      if (prev.has(hex)) return prev;
+
+      const next = new Set(prev);
+
+      next.add(hex);
+      localStorage.setItem(CONTACTS_ALLOWLIST_KEY, JSON.stringify([...next]));
+
+      return next;
+    });
+  }, []);
+  const isAllowed = useCallback((hex: string) => allowed.has(hex), [allowed]);
+
+  return { allow, allowed, isAllowed };
+};
+
+export const useBlocklist = (): {
+  block: (hex: string) => void;
+  blocked: Set<string>;
+  isBlocked: (hex: string) => boolean;
+} => {
+  const [blocked, setBlocked] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(CONTACTS_BLOCKLIST_KEY) || "[]";
+
+      return new Set(JSON.parse(raw) as string[]);
+    } catch {
+      return new Set();
+    }
+  });
+  const block = useCallback((hex: string) => {
+    setBlocked((prev) => {
+      if (prev.has(hex)) return prev;
+
+      const next = new Set(prev);
+
+      next.add(hex);
+      localStorage.setItem(CONTACTS_BLOCKLIST_KEY, JSON.stringify([...next]));
+
+      return next;
+    });
+  }, []);
+  const isBlocked = useCallback((hex: string) => blocked.has(hex), [blocked]);
+
+  return { block, blocked, isBlocked };
 };

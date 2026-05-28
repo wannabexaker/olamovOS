@@ -5,6 +5,7 @@ import { useNip05Domain } from "components/apps/Messenger/hooks";
 
 type ProfileProps = {
   nip05?: string;
+  onClick?: (event: React.MouseEvent) => void;
   onMouseDown?: () => void;
   picture?: string;
   pubkey?: string;
@@ -14,6 +15,7 @@ type ProfileProps = {
 const Profile: FC<ProfileProps> = ({
   children,
   nip05,
+  onClick,
   onMouseDown,
   picture,
   pubkey,
@@ -23,9 +25,9 @@ const Profile: FC<ProfileProps> = ({
   const [loadedImage, setLoadedImage] = useState("");
 
   return (
-    <StyledProfile $clickable={Boolean(onMouseDown)}>
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-      <div onMouseDown={onMouseDown}>
+    <StyledProfile $clickable={Boolean(onMouseDown || onClick)}>
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+      <div onClick={onClick} onMouseDown={onMouseDown}>
         {picture && (
           <img
             alt={userName}

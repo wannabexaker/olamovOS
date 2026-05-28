@@ -3,7 +3,16 @@ import ScrollBars from "styles/common/ScrollBars";
 
 const StyledSendMessage = styled.div`
   display: flex;
+  flex-wrap: wrap;
+  min-height: 56px;
   place-items: center;
+
+  .hint {
+    color: ${({ theme }) => theme.colors.highlight};
+    font-size: 11px;
+    padding: 4px 12px 0;
+    width: 100%;
+  }
 
   textarea {
     ${ScrollBars()}
@@ -21,6 +30,11 @@ const StyledSendMessage = styled.div`
     width: 100%;
 
     &:disabled {
+      background: ${({ theme }) => theme.colors.startMenu.bandBackground};
+      color: ${({ theme }) => theme.colors.text};
+      cursor: pointer;
+      opacity: 70%;
+
       &::placeholder {
         color: rgb(117 117 117 / 75%);
       }

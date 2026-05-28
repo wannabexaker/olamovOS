@@ -6,6 +6,7 @@ type ToProps = { setRecipientKey: (key: string) => boolean };
 const To: FC<ToProps> = ({ setRecipientKey }) => (
   <StyledTo>
     <input
+      className="messenger-to-input"
       onKeyDown={(event) => {
         if (
           event.key === "Enter" &&

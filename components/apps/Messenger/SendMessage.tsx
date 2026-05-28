@@ -44,8 +44,18 @@ const SendMessage: FC<{ recipientPublicKey: string }> = ({
     }
   }, []);
 
+  const onContainerClick = useCallback(() => {
+    if (!isUnknownKey) return;
+    document.querySelector<HTMLInputElement>(".messenger-to-input")?.focus();
+  }, [isUnknownKey]);
+
   return (
-    <StyledSendMessage>
+    <StyledSendMessage onClick={onContainerClick}>
+      {isUnknownKey && (
+        <div className="hint">
+          Add a contact (npub or NIP-05 address) above first.
+        </div>
+      )}
       <textarea
         ref={inputRef}
         disabled={isUnknownKey}
@@ -64,7 +74,11 @@ const SendMessage: FC<{ recipientPublicKey: string }> = ({
 
           updateHeight();
         }}
-        placeholder="Type a message..."
+        placeholder={
+          isUnknownKey
+            ? "Pick a recipient above to start typing\u2026"
+            : "Type a message..."
+        }
         autoFocus
       />
       <Button
