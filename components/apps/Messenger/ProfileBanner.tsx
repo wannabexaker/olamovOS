@@ -88,47 +88,57 @@ const ProfileBanner: FC<ProfileBannerProps> = ({
     },
     [data, pubkey, publicKey, publish, setProfiles]
   );
-  const { onContextMenuCapture } = useMemo(
-    () =>
-      /* eslint-disable no-alert */
-      contextMenu?.(() => [
-        ...copyKeyMenuItems(selectedRecipientKey || pubkey, getPrivateKey()),
-        ...(pubkey && !selectedRecipientKey
-          ? [
-              MENU_SEPERATOR,
-              {
-                action: () =>
-                  updateProfile({ username: prompt("Username") || "" }),
-                label: "Edit Username",
-              },
-              MENU_SEPERATOR,
-              {
-                action: () =>
-                  updateProfile({ picture: prompt("Picture URL") || "" }),
-                label: "Edit Picture",
-              },
-              {
-                action: () =>
-                  updateProfile({ banner: prompt("Banner URL") || "" }),
-                label: "Edit Banner",
-              },
-              MENU_SEPERATOR,
-              {
-                action: () => setHideReadMessages(!hideReadMessages),
-                label: `${hideReadMessages ? "Show" : "Hide"} Read Messages`,
-              },
-            ]
-          : []),
-      ]),
-    /* eslint-enable no-alert */
+  const menuItems = useCallback(
+    () => [
+      ...copyKeyMenuItems(selectedRecipientKey || pubkey, getPrivateKey()),
+      ...(pubkey && !selectedRecipientKey
+        ? [
+            MENU_SEPERATOR,
+            {
+               
+              action: () =>
+                updateProfile({ username: prompt("Username") || "" }),
+              label: "Edit Username",
+            },
+            MENU_SEPERATOR,
+            {
+               
+              action: () =>
+                updateProfile({ picture: prompt("Picture URL") || "" }),
+              label: "Edit Picture",
+            },
+            {
+               
+              action: () =>
+                updateProfile({ banner: prompt("Banner URL") || "" }),
+              label: "Edit Banner",
+            },
+            MENU_SEPERATOR,
+            {
+              action: () => setHideReadMessages(!hideReadMessages),
+              label: `${hideReadMessages ? "Show" : "Hide"} Read Messages`,
+            },
+          ]
+        : []),
+    ],
     [
-      contextMenu,
       hideReadMessages,
       pubkey,
       selectedRecipientKey,
       setHideReadMessages,
       updateProfile,
     ]
+  );
+  const { onContextMenuCapture } = useMemo(
+    () => contextMenu?.(menuItems),
+    [contextMenu, menuItems]
+  );
+  const onProfileClick = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation();
+      onContextMenuCapture?.(event);
+    },
+    [onContextMenuCapture]
   );
 
   return (
@@ -158,6 +168,7 @@ const ProfileBanner: FC<ProfileBannerProps> = ({
       )}
       <Profile
         nip05={nip05}
+        onClick={onProfileClick}
         onMouseDown={onContextMenuCapture}
         picture={picture}
         pubkey={pubkey}

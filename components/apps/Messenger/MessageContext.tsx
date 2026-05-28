@@ -10,6 +10,11 @@ import {
 import { type Event } from "nostr-tools";
 import { useHistoryContext } from "components/apps/Messenger/HistoryContext";
 import {
+  CONTACTS_ALLOWLIST_KEY,
+  CONTACTS_BLOCKLIST_KEY,
+  SPAM_RATE_LIMIT_PER_HOUR,
+} from "components/apps/Messenger/constants";
+import {
   getKeyFromTags,
   getMessages,
   groupChatEvents,
@@ -104,16 +109,75 @@ export const MessageProvider = memo<FC<MessageProviderProps>>(
     );
     const [events, setEvents] = useState<Event[]>(chatEvents);
 
+    const filterSpam = useCallback(
+      (eventList: Event[]): Event[] => {
+        const blocklist = new Set<string>(
+          (() => {
+            try {
+              return JSON.parse(
+                localStorage.getItem(CONTACTS_BLOCKLIST_KEY) || "[]"
+              ) as string[];
+            } catch {
+              return [];
+            }
+          })()
+        );
+        const allowlist = new Set<string>(
+          (() => {
+            try {
+              return JSON.parse(
+                localStorage.getItem(CONTACTS_ALLOWLIST_KEY) || "[]"
+              ) as string[];
+            } catch {
+              return [];
+            }
+          })()
+        );
+        const counter: Record<string, number[]> = (() => {
+          try {
+            return JSON.parse(
+              localStorage.getItem("nostr_rate_counter") || "{}"
+            ) as Record<string, number[]>;
+          } catch {
+            return {};
+          }
+        })();
+        const now = Date.now();
+        const hourAgo = now - 60 * 60 * 1000;
+
+        const filtered = eventList.filter(({ pubkey }) => {
+          if (blocklist.has(pubkey)) return false;
+          if (allowlist.has(pubkey) || pubkey === publicKey) return true;
+
+          counter[pubkey] = (counter[pubkey] || []).filter(
+            (t: number) => t > hourAgo
+          );
+
+          if (counter[pubkey].length >= SPAM_RATE_LIMIT_PER_HOUR) return false;
+
+          counter[pubkey].push(now);
+
+          return true;
+        });
+
+        localStorage.setItem("nostr_rate_counter", JSON.stringify(counter));
+
+        return filtered;
+      },
+      [publicKey]
+    );
+
     useEffect(() => {
+      const filteredChatEvents = filterSpam(chatEvents);
       const currentEvents = [
-        ...chatEvents,
+        ...filteredChatEvents,
         ...outgoingEvents.filter(
-          (event) => !chatEvents.some(({ id }) => id === event.id)
+          (event) => !filteredChatEvents.some(({ id }) => id === event.id)
         ),
       ];
 
       if (currentEvents.length !== events.length) setEvents(currentEvents);
-    }, [chatEvents, events, outgoingEvents]);
+    }, [chatEvents, events, filterSpam, outgoingEvents]);
 
     useEffect(() => {
       outgoingEvents.forEach((message) => {

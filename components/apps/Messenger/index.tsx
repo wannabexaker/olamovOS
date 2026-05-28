@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type Event } from "nostr-tools";
+import { type Event, nip19 } from "nostr-tools";
 import { AnimatePresence } from "motion/react";
 import ChatLog from "components/apps/Messenger/ChatLog";
 import Contact from "components/apps/Messenger/Contact";
@@ -17,6 +17,7 @@ import StyledContacts from "components/apps/Messenger/StyledContacts";
 import StyledMessenger from "components/apps/Messenger/StyledMessenger";
 import To from "components/apps/Messenger/To";
 import {
+  OLAMOV_OWNER_NPUB,
   UNKNOWN_PUBLIC_KEY,
   inLeftOutRight,
   inRightOutLeft,
@@ -27,6 +28,8 @@ import {
   toHexKey,
 } from "components/apps/Messenger/functions";
 import {
+  useAllowlist,
+  useBlocklist,
   useNip05,
   useNostrContacts,
   usePublicKey,
@@ -55,6 +58,25 @@ const NostrChat: FC<NostrChatProps> = ({
   const { setSeenEventIds } = useHistoryContext();
   const [selectedRecipientKey, setSelectedRecipientKey] = useState<string>("");
   const [hideReadMessages, setHideReadMessages] = useState<boolean>(false);
+  const { allow, isAllowed } = useAllowlist();
+  const { block, isBlocked } = useBlocklist();
+  const ownerHex = useMemo(() => {
+    let hex;
+
+    if (OLAMOV_OWNER_NPUB) {
+      try {
+        const decoded = nip19.decode(OLAMOV_OWNER_NPUB);
+
+        if (decoded.type === "npub") {
+          hex = decoded.data;
+        }
+      } catch {
+        // noop
+      }
+    }
+
+    return hex;
+  }, []);
   const changeRecipient = useCallback(
     (recipientKey: string, currentEvents?: Event[]) =>
       setSelectedRecipientKey((currenRecipientKey: string) => {
@@ -161,17 +183,37 @@ const NostrChat: FC<NostrChatProps> = ({
               onContextMenu={haltEvent}
               {...inLeftOutRight}
             >
+              {ownerHex && !contactKeys.includes(ownerHex) && (
+                <Contact
+                  key={ownerHex}
+                  lastEvent={lastEvents[ownerHex]}
+                  onClick={() => changeRecipient(ownerHex, events)}
+                  pubkey={ownerHex}
+                  publicKey={publicKey}
+                  unreadEvent={
+                    hideReadMessages ||
+                    unreadEvents.includes(lastEvents[ownerHex])
+                  }
+                  pinned
+                />
+              )}
               {contactKeys
                 .filter(
                   (contactKey) =>
-                    !hideReadMessages ||
-                    unreadEvents.includes(lastEvents[contactKey])
+                    !isBlocked(contactKey) &&
+                    (isAllowed(contactKey) || contactKey === ownerHex) &&
+                    (!hideReadMessages ||
+                      unreadEvents.includes(lastEvents[contactKey]))
                 )
                 .map((contactKey) => (
                   <Contact
                     key={contactKey}
                     lastEvent={lastEvents[contactKey]}
-                    onClick={() => changeRecipient(contactKey, events)}
+                    onClick={() => {
+                      changeRecipient(contactKey, events);
+                      allow(contactKey);
+                    }}
+                    pinned={contactKey === ownerHex}
                     pubkey={contactKey}
                     publicKey={publicKey}
                     unreadEvent={
@@ -180,6 +222,41 @@ const NostrChat: FC<NostrChatProps> = ({
                     }
                   />
                 ))}
+              {(() => {
+                const requestList = contactKeys.filter(
+                  (contactKey) =>
+                    !isBlocked(contactKey) &&
+                    !isAllowed(contactKey) &&
+                    contactKey !== ownerHex &&
+                    (!hideReadMessages ||
+                      unreadEvents.includes(lastEvents[contactKey]))
+                );
+
+                return requestList.length > 0 ? (
+                  <section className="requests">
+                    <h3>Message Requests ({requestList.length})</h3>
+                    {requestList.map((contactKey) => (
+                      <Contact
+                        key={contactKey}
+                        lastEvent={lastEvents[contactKey]}
+                        onAccept={() => allow(contactKey)}
+                        onBlock={() => block(contactKey)}
+                        onClick={() => {
+                          changeRecipient(contactKey, events);
+                          allow(contactKey);
+                        }}
+                        pubkey={contactKey}
+                        publicKey={publicKey}
+                        unreadEvent={
+                          hideReadMessages ||
+                          unreadEvents.includes(lastEvents[contactKey])
+                        }
+                        isRequest
+                      />
+                    ))}
+                  </section>
+                ) : undefined;
+              })()}
               <GetMoreMessages setSince={setSince} />
             </StyledContacts>
           )}

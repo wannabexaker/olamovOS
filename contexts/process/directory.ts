@@ -442,6 +442,16 @@ const directory: Processes = {
     singleton: true,
     title: "Webamp",
   },
+  olamovStream: {
+    Component: dynamic(() => import("components/apps/olamovStream")),
+    backgroundColor: "#1d1233",
+    defaultSize: {
+      height: 480,
+      width: 720,
+    },
+    icon: "/System/Icons/olamov-stream.png",
+    title: "olamovStream",
+  },
 };
 
 export default directory;

@@ -114,6 +114,54 @@ const StyledContacts = styled(motion.ol)`
       top: calc(50% - 5px);
       width: 10px;
     }
+
+    .request-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      padding: 4px 8px 0;
+
+      button {
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 12px;
+
+        &:first-child {
+          background: #0084ff;
+          color: #fff;
+        }
+
+        &:last-child {
+          background: #3a3b3c;
+          color: #b0b3b8;
+        }
+      }
+    }
+  }
+
+  [data-pinned="owner"] {
+    background: linear-gradient(
+      180deg,
+      ${({ theme }) => theme.colors.startMenu.bandBackground} 0%,
+      ${({ theme }) => theme.colors.startMenu.bandGradient} 100%
+    );
+    border-bottom: 1px solid ${({ theme }) => theme.colors.taskbar.bevelBottom};
+    box-shadow: inset 0 -1px 0 ${({ theme }) => theme.colors.taskbar.bevelTop};
+  }
+
+  section.requests {
+    border-top: 1px solid ${({ theme }) => theme.colors.taskbar.bevelBottom};
+    margin-top: 8px;
+    padding-top: 8px;
+
+    > h3 {
+      color: ${({ theme }) => theme.colors.highlight};
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 12px;
+      text-transform: uppercase;
+    }
   }
 `;
 

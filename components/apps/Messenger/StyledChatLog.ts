@@ -3,7 +3,8 @@ import ScrollBars from "styles/common/ScrollBars";
 
 const StyledChatLog = styled.ol`
   ${ScrollBars()}
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow-x: auto;
   scrollbar-gutter: auto;
 

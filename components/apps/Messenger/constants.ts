@@ -13,6 +13,13 @@ export const BASE_RW_RELAYS = [
   "wss://relayable.org",
 ];
 
+// TODO: the user will replace null with their actual npub1... address before deploy.
+// When set, this contact appears pinned at the top of the contacts list.
+export const OLAMOV_OWNER_NPUB: string | undefined =
+  "npub1mwms32r8dtu580m88xx2u44w7c2kyknj39zfzp9dknny6rqq4zrsg32gpg";
+export const OLAMOV_OWNER_NAME = "Olamov Owner";
+export const OLAMOV_OWNER_AVATAR = "/System/Icons/olamov-owner-avatar.jpg";
+
 export const METADATA_KIND = 0;
 export const DM_KIND = 4;
 
@@ -53,3 +60,7 @@ export const inRightOutLeft: MotionProps = {
 };
 
 export const SEEN_EVENTS_DEBOUNCE_MS = 16; // 60 FPS == Math.floor(1000 / 60)
+
+export const CONTACTS_ALLOWLIST_KEY = "nostr_contacts_allowlist";
+export const CONTACTS_BLOCKLIST_KEY = "nostr_contacts_blocklist";
+export const SPAM_RATE_LIMIT_PER_HOUR = 5;
