@@ -30,10 +30,9 @@ Windows 98 icons/
 !public/Users/Public/Desktop/Olamov Terminal.url
 !public/Users/Public/Documents
 !public/Users/Public/Documents/Blog Posts
-!public/Users/Public/Documents/Blog Posts/desktop.ini
+!public/Users/Public/Documents/Blog Posts/**
 !public/Users/Public/Documents/DOS Bundles
-!public/Users/Public/Documents/DOS Bundles/desktop.ini
-!public/Users/Public/Documents/DOS Bundles/doom.jsdos
+!public/Users/Public/Documents/DOS Bundles/**
 !public/Users/Public/Music
 !public/Users/Public/Pictures
 !public/Users/Public/Pictures/*.png
@@ -50,10 +49,5 @@ Windows 98 icons/
 !public/Users/Public/Start Menu/Emulators
 !public/Users/Public/Start Menu/Emulators/*.url
 !public/Users/Public/Start Menu/Games
-!public/Users/Public/Start Menu/Games/Chess.url
-!public/Users/Public/Start Menu/Games/Chrome Dino.url
-!public/Users/Public/Start Menu/Games/ClassiCube.url
-!public/Users/Public/Start Menu/Games/DX-Ball.url
-!public/Users/Public/Start Menu/Games/Quake III Arena.url
-!public/Users/Public/Start Menu/Games/Space Cadet.url
+!public/Users/Public/Start Menu/Games/*.url
 !public/Users/Public/Videos

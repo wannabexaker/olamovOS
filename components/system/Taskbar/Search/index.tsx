@@ -78,6 +78,19 @@ const SUGGESTED = ["FileExplorer", "Terminal", "Messenger", "Browser", "Paint"];
 
 const GAMES = ["SpaceCadet", "Quake3", "DXBall"];
 
+const DOCUMENT_FOLDERS = [
+  {
+    icon: "/System/Icons/olamov-msdos.png",
+    name: "DOS Bundles",
+    path: "/Users/Public/Start Menu/Documents/DOS Bundles",
+  },
+  {
+    icon: "/System/Icons/olamov-blog-posts.png",
+    name: "Blog Posts",
+    path: "/Users/Public/Start Menu/Documents/Blog Posts",
+  },
+];
+
 const METADATA = {
   Documents: {
     icon: <Documents />,
@@ -104,7 +117,7 @@ const ResultSection = dynamic(
 const Search: FC<SearchProps> = ({ toggleSearch }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const menuRef = useRef<HTMLElement | null>(null);
-  const { recentFiles, updateRecentFiles } = useSession();
+  const { recentFiles = [], updateRecentFiles } = useSession();
   const { lstat, readFile } = useFileSystem();
   const [activeTab, setActiveTab] = useState<TabName>("All");
   const {
@@ -326,7 +339,7 @@ const Search: FC<SearchProps> = ({ toggleSearch }) => {
                 </figure>
               </section>
               <section>
-                {recentFiles.length > 0 && (
+                {recentFiles?.length > 0 && (
                   <StyledFiles>
                     <figcaption>Recent</figcaption>
                     <ol>
@@ -384,6 +397,25 @@ const Search: FC<SearchProps> = ({ toggleSearch }) => {
                           </li>
                         )
                     )}
+                  </ol>
+                </figure>
+                <figure className="card">
+                  <figcaption>
+                    <Documents />
+                    Documents
+                  </figcaption>
+                  <ol>
+                    {DOCUMENT_FOLDERS.map(({ icon, name, path }) => (
+                      // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
+                      <li
+                        key={name}
+                        onClick={() => openApp("FileExplorer", { url: path })}
+                        title={name}
+                      >
+                        <Icon displaySize={56} imgSize={96} src={icon} />
+                        <h4>{name}</h4>
+                      </li>
+                    ))}
                   </ol>
                 </figure>
               </section>
