@@ -40,6 +40,8 @@ export type IconPositions = Record<string, IconPosition>;
 
 export type SessionData = {
   aiEnabled: boolean;
+  audioMuted: boolean;
+  audioVolume: number;
   clockSource: ClockSource;
   closeEffect: string;
   cursor: string | undefined;
@@ -61,6 +63,8 @@ export type SessionContextState = SessionData & {
   removeFromStack: (id: string) => void;
   sessionLoaded: boolean;
   setAiEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  setAudioMuted: React.Dispatch<React.SetStateAction<boolean>>;
+  setAudioVolume: React.Dispatch<React.SetStateAction<number>>;
   setClockSource: React.Dispatch<React.SetStateAction<ClockSource>>;
   setCloseEffect: React.Dispatch<React.SetStateAction<string>>;
   setCursor: React.Dispatch<React.SetStateAction<string | undefined>>;

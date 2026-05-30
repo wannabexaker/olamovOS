@@ -82,12 +82,12 @@ const DOCUMENT_FOLDERS = [
   {
     icon: "/System/Icons/olamov-msdos.png",
     name: "DOS Bundles",
-    path: "/Users/Public/Start Menu/Documents/DOS Bundles",
+    path: "/Users/Public/Documents/DOS Bundles",
   },
   {
     icon: "/System/Icons/olamov-blog-posts.png",
     name: "Blog Posts",
-    path: "/Users/Public/Start Menu/Documents/Blog Posts",
+    path: "/Users/Public/Documents/Blog Posts",
   },
 ];
 

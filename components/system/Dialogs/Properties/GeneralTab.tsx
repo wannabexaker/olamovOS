@@ -137,16 +137,20 @@ const GeneralTab: FC<TabProps> = ({ icon, id, isShortcut, pid, url }) => {
         let currentFolderSize = 0;
 
         for (const entry of entries) {
-          // eslint-disable-next-line no-await-in-loop
-          const entryStats = await stat(join(contentUrl, entry));
-
-          if (entryStats.isDirectory()) {
-            currentFolderCount += 1;
+          try {
             // eslint-disable-next-line no-await-in-loop
-            await countContents(join(contentUrl, entry));
-          } else {
-            currentFileCount += 1;
-            currentFolderSize += entryStats.size;
+            const entryStats = await stat(join(contentUrl, entry));
+
+            if (entryStats.isDirectory()) {
+              currentFolderCount += 1;
+              // eslint-disable-next-line no-await-in-loop
+              await countContents(join(contentUrl, entry));
+            } else {
+              currentFileCount += 1;
+              currentFolderSize += entryStats.size;
+            }
+          } catch {
+            // Skip entries that can't be stat'd (special/permission-denied paths like /dev/null)
           }
         }
 
@@ -155,7 +159,9 @@ const GeneralTab: FC<TabProps> = ({ icon, id, isShortcut, pid, url }) => {
         setFolderCount((count) => count + currentFolderCount);
       };
 
-      countContents(url);
+      countContents(url).catch(() => {
+        // Ignore failures while counting folder contents
+      });
     }
   }, [isDirectory, isShortcut, readdir, stat, url]);
 

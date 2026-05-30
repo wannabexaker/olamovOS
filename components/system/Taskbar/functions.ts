@@ -11,6 +11,8 @@ export const importCalendar = () =>
   import("components/system/Taskbar/Calendar");
 export const importSearch = () => import("components/system/Taskbar/Search");
 export const importStartMenu = () => import("components/system/StartMenu");
+export const importVolumePanel = () =>
+  import("components/system/Taskbar/Volume/VolumePanel");
 /* eslint-enable @typescript-eslint/explicit-function-return-type */
 
 export const maybeCloseTaskbarMenu = (

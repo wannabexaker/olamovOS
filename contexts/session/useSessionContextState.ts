@@ -62,6 +62,8 @@ const useSessionContextState = (): SessionContextState => {
   const [clockSource, setClockSource] = useState(DEFAULT_CLOCK_SOURCE);
   const [cursor, setCursor] = useState<string | undefined>();
   const [aiEnabled, setAiEnabled] = useState(false);
+  const [audioMuted, setAudioMuted] = useState(false);
+  const [audioVolume, setAudioVolume] = useState(1);
   const [closeEffect, setCloseEffect] = useState(DEFAULT_CLOSE_EFFECT);
   const [lazySheep, setLazySheep] = useState(false);
   const [windowStates, setWindowStates] = useState(
@@ -218,6 +220,8 @@ const useSessionContextState = (): SessionContextState => {
           SESSION_FILE,
           JSON.stringify({
             aiEnabled,
+            audioMuted,
+            audioVolume,
             clockSource,
             closeEffect,
             cursor,
@@ -238,6 +242,8 @@ const useSessionContextState = (): SessionContextState => {
     }
   }, [
     aiEnabled,
+    audioMuted,
+    audioVolume,
     clockSource,
     closeEffect,
     cursor,
@@ -288,6 +294,10 @@ const useSessionContextState = (): SessionContextState => {
           if (session.closeEffect) setCloseEffect(session.closeEffect);
           if (session.cursor) setCursor(session.cursor);
           if (session.aiEnabled) setAiEnabled(session.aiEnabled);
+          if (typeof session.audioMuted === "boolean")
+            {setAudioMuted(session.audioMuted);}
+          if (typeof session.audioVolume === "number")
+            {setAudioVolume(session.audioVolume);}
           if (session.themeName) setThemeName(session.themeName);
           if (session.wallpaperImage) {
             setWallpaper(session.wallpaperImage, session.wallpaperFit);
@@ -396,6 +406,8 @@ const useSessionContextState = (): SessionContextState => {
 
   return {
     aiEnabled,
+    audioMuted,
+    audioVolume,
     clockSource,
     closeEffect,
     cursor,
@@ -407,6 +419,8 @@ const useSessionContextState = (): SessionContextState => {
     runHistory,
     sessionLoaded,
     setAiEnabled,
+    setAudioMuted,
+    setAudioVolume,
     setClockSource,
     setCloseEffect,
     setCursor,

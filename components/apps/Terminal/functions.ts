@@ -286,7 +286,7 @@ export const getFreeSpace = async (): Promise<string> => {
 
   if (quota === 0) return "";
 
-  return `  ${(quota - usage).toLocaleString()} bytes`;
+  return `  ${(quota - usage).toLocaleString()} bytes free`;
 };
 
 export const getUptime = (isShort = false): string => {

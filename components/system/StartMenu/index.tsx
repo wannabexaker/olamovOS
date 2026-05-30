@@ -109,9 +109,6 @@ const StartMenu: FC<StartMenuProps> = ({ toggleSearch, toggleStartMenu }) => {
         <strong>Olamov</strong> 1994 <strong>Universe</strong>
       </aside>
       <FileManager
-        initiallyExpanded={
-          ["Programs"] /* Phase 4: auto-expand Programs folder */
-        }
         pinToBottom={["Run...", "Shut Down..."]}
         url={START_MENU_PATH}
         hideLoading

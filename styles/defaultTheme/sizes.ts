@@ -76,6 +76,9 @@ const sizes = {
       },
     },
     panelBlur: "12px",
+    volume: {
+      buttonWidth: "30px",
+    },
   },
   titleBar: {
     buttonIconWidth: "10px",

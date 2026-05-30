@@ -14,7 +14,7 @@ const StyledTaskbarEntries = styled.ol<StyledTaskbarEntriesProps>`
   overflow: hidden;
   position: absolute;
   right: ${({ $clockWidth, $hasAI, theme }) =>
-    `calc(${$clockWidth}px + ${theme.sizes.clock.padding * 2}px + ${$hasAI ? theme.sizes.taskbar.ai.buttonWidth : "0px"})`};
+    `calc(${$clockWidth}px + ${theme.sizes.clock.padding * 2}px + ${$hasAI ? theme.sizes.taskbar.ai.buttonWidth : "0px"} + ${theme.sizes.taskbar.volume.buttonWidth})`};
 `;
 
 export default StyledTaskbarEntries;

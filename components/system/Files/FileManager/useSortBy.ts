@@ -9,6 +9,7 @@ export type SortByOrder = [SortBy, boolean];
 
 export type SetSortBy = (sortBy: (current: SortByOrder) => SortByOrder) => void;
 
+// Default sort: by name, ascending. Persisted per-folder via session sortOrders.
 const DEFAULT_SORT_BY = ["name", true] as SortByOrder;
 
 const useSortBy = (
