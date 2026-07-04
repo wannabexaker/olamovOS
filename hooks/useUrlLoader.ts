@@ -4,6 +4,7 @@ import { useFileSystem } from "contexts/fileSystem";
 import { useProcesses } from "contexts/process";
 import processDirectory from "contexts/process/directory";
 import { getExtension, getSearchParam } from "utils/functions";
+import { getRouteByPath } from "utils/publicRoutes";
 
 const isBrowserUrl = (url: string): boolean =>
   url.startsWith("http://") ||
@@ -20,8 +21,11 @@ const useUrlLoader = (): void => {
 
     loadedInitialAppRef.current = true;
 
-    const app = getSearchParam("app");
-    const url = getSearchParam("url");
+    // Clean public routes (e.g. /apps/terminal, /gallery/bedroom, /games/doom)
+    // resolve to the same app/url the legacy query params would have produced.
+    const route = getRouteByPath(window.location.pathname);
+    const app = route?.app || getSearchParam("app");
+    const url = route?.url || getSearchParam("url");
 
     const loadInitialApp = async (initialApp: string): Promise<void> => {
       if (!initialApp) return;

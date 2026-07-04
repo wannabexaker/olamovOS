@@ -1,0 +1,231 @@
+[
+  {
+    "path": "/",
+    "kind": "home",
+    "h1": "Olamov OS",
+    "description": "Olamov OS is a retro purple, 1990s Windows-style desktop that runs entirely in your browser. Open apps, browse a virtual file system, play classic DOS games and explore the Olamov visual universe."
+  },
+  {
+    "path": "/apps/browser",
+    "kind": "app",
+    "app": "Browser",
+    "category": "App",
+    "h1": "Olamov Browser",
+    "title": "Olamov Browser — Retro Web Browser App",
+    "description": "Open the Olamov Browser, a retro purple web browser inside the Olamov OS browser desktop."
+  },
+  {
+    "path": "/apps/terminal",
+    "kind": "app",
+    "app": "Terminal",
+    "category": "App",
+    "h1": "Olamov Terminal",
+    "title": "Olamov Terminal — Retro Web Terminal App",
+    "description": "Open the Olamov Terminal, a retro purple web terminal inside the Olamov OS browser desktop."
+  },
+  {
+    "path": "/apps/video-player",
+    "kind": "app",
+    "app": "VideoPlayer",
+    "category": "App",
+    "h1": "Olamov Video Player",
+    "title": "Olamov Video Player — Retro Media Player App",
+    "description": "Play videos in the Olamov Video Player inside the Olamov OS retro browser desktop."
+  },
+  {
+    "path": "/apps/paint",
+    "kind": "app",
+    "app": "Paint",
+    "category": "App",
+    "h1": "Olamov Paint",
+    "title": "Olamov Paint — Retro Drawing App",
+    "description": "Draw and edit images in Olamov Paint inside the Olamov OS retro browser desktop."
+  },
+  {
+    "path": "/apps/file-explorer",
+    "kind": "app",
+    "app": "FileExplorer",
+    "category": "App",
+    "h1": "Olamov File Explorer",
+    "title": "Olamov File Explorer — Retro File Manager",
+    "description": "Browse files and folders in the Olamov File Explorer inside the Olamov OS retro desktop."
+  },
+  {
+    "path": "/apps/notepad",
+    "kind": "app",
+    "app": "Notepad",
+    "category": "App",
+    "h1": "Olamov Notepad",
+    "title": "Olamov Notepad — Retro Text Editor",
+    "description": "Write and edit text in Olamov Notepad inside the Olamov OS retro browser desktop."
+  },
+  {
+    "path": "/apps/photos",
+    "kind": "app",
+    "app": "Photos",
+    "category": "App",
+    "h1": "Olamov Photos",
+    "title": "Olamov Photos — Retro Image Viewer",
+    "description": "View images in Olamov Photos inside the Olamov OS retro browser desktop."
+  },
+  {
+    "path": "/apps/olamov-stream",
+    "kind": "app",
+    "app": "olamovStream",
+    "category": "App",
+    "h1": "Olamov Stream",
+    "title": "Olamov Stream — Retro Web Media Streamer",
+    "description": "Queue and play online videos in Olamov Stream inside the Olamov OS retro browser desktop."
+  },
+  {
+    "path": "/apps/my-projects",
+    "kind": "app",
+    "app": "MyProjects",
+    "category": "Portfolio",
+    "h1": "My Projects",
+    "title": "My Projects — Portfolio inside Olamov OS",
+    "description": "A showcase of projects built by the maker of Olamov OS — a booking SaaS, a slot game, a GTA VI tool and a rap-battle platform, each runnable right in the browser."
+  },
+  {
+    "path": "/apps/radevu",
+    "kind": "app",
+    "app": "Radevu",
+    "category": "Project",
+    "h1": "Radevu",
+    "title": "Radevu — Appointment Booking SaaS | Olamov Projects",
+    "description": "Radevu is an appointment-booking platform for small service businesses: online booking, customer history and reminders. Launch it inside Olamov OS."
+  },
+  {
+    "path": "/apps/eye",
+    "kind": "app",
+    "app": "EyeInTheSky",
+    "category": "Project",
+    "h1": "The Eye in the Sky",
+    "title": "The Eye in the Sky — Cluster-Pays Slot Game | Olamov Projects",
+    "description": "A cluster-pays slot game built with PixiJS, themed around a temple ritual with cascading wins. Play it inside Olamov OS."
+  },
+  {
+    "path": "/apps/vc-hub",
+    "kind": "app",
+    "app": "VCHub",
+    "category": "Project",
+    "h1": "VC Hub",
+    "title": "VC Hub — GTA VI Prices, Stats & Value | Olamov Projects",
+    "description": "VC Hub is a GTA VI price, stats and value-for-money database for Vice City. Browse it inside Olamov OS."
+  },
+  {
+    "path": "/apps/cypher",
+    "kind": "app",
+    "app": "Cypher",
+    "category": "Project",
+    "h1": "Cypher",
+    "title": "Cypher — Rap Battle & Live Voting | Olamov Projects",
+    "description": "Cypher is a rap & hip-hop battle platform: host rooms with shareable codes, submit tracks and let the crowd vote live. Explore it inside Olamov OS."
+  },
+  {
+    "path": "/gallery/bedroom",
+    "kind": "gallery",
+    "url": "Users/Public/Pictures/bedroom.png",
+    "image": true,
+    "category": "Wallpaper",
+    "h1": "Bedroom — Olamov Wallpaper",
+    "title": "Olamov Bedroom Wallpaper — Retro Purple Dreamcore Scene",
+    "description": "A retro 1999 purple dreamcore bedroom wallpaper from the Olamov visual universe."
+  },
+  {
+    "path": "/gallery/garden",
+    "kind": "gallery",
+    "url": "Users/Public/Pictures/garden.png",
+    "image": true,
+    "category": "Wallpaper",
+    "h1": "Garden — Olamov Wallpaper",
+    "title": "Olamov Garden Wallpaper — Retro Purple Dreamcore Scene",
+    "description": "A retro purple dreamcore garden wallpaper from the Olamov visual universe."
+  },
+  {
+    "path": "/gallery/metro",
+    "kind": "gallery",
+    "url": "Users/Public/Pictures/metro.png",
+    "image": true,
+    "category": "Wallpaper",
+    "h1": "Metro — Olamov Wallpaper",
+    "title": "Olamov Metro Wallpaper — Retro Purple Dreamcore Scene",
+    "description": "A retro purple dreamcore metro wallpaper from the Olamov visual universe."
+  },
+  {
+    "path": "/gallery/mountain",
+    "kind": "gallery",
+    "url": "Users/Public/Pictures/mountain.png",
+    "image": true,
+    "category": "Wallpaper",
+    "h1": "Mountain — Olamov Wallpaper",
+    "title": "Olamov Mountain Wallpaper — Retro Purple Dreamcore Scene",
+    "description": "A retro purple dreamcore mountain wallpaper from the Olamov visual universe."
+  },
+  {
+    "path": "/gallery/night",
+    "kind": "gallery",
+    "url": "Users/Public/Pictures/night.png",
+    "image": true,
+    "category": "Wallpaper",
+    "h1": "Night — Olamov Wallpaper",
+    "title": "Olamov Night Wallpaper — Retro Purple Dreamcore Scene",
+    "description": "A retro purple dreamcore night cityscape wallpaper from the Olamov visual universe."
+  },
+  {
+    "path": "/gallery/race",
+    "kind": "gallery",
+    "url": "Users/Public/Pictures/race.png",
+    "image": true,
+    "category": "Wallpaper",
+    "h1": "Race — Olamov Wallpaper",
+    "title": "Olamov Race Wallpaper — Retro Purple Dreamcore Scene",
+    "description": "A retro purple dreamcore racing wallpaper from the Olamov visual universe."
+  },
+  {
+    "path": "/gallery/workout",
+    "kind": "gallery",
+    "url": "Users/Public/Pictures/workout.png",
+    "image": true,
+    "category": "Wallpaper",
+    "h1": "Workout — Olamov Wallpaper",
+    "title": "Olamov Workout Wallpaper — Retro Purple Dreamcore Scene",
+    "description": "A retro purple dreamcore workout wallpaper from the Olamov visual universe."
+  },
+  {
+    "path": "/games/doom",
+    "kind": "game",
+    "url": "Users/Public/Documents/DOS Bundles/doom.jsdos",
+    "category": "Game",
+    "h1": "Doom",
+    "title": "Doom — DOS Game in Olamov OS",
+    "description": "Launch the classic DOS Doom experience inside the Olamov retro browser desktop."
+  },
+  {
+    "path": "/games/duke3d",
+    "kind": "game",
+    "url": "Users/Public/Documents/DOS Bundles/dn3d.jsdos",
+    "category": "Game",
+    "h1": "Duke Nukem 3D",
+    "title": "Duke Nukem 3D — DOS Game in Olamov OS",
+    "description": "Play Duke Nukem 3D, the classic DOS shooter, inside the Olamov retro browser desktop."
+  },
+  {
+    "path": "/games/skyroads",
+    "kind": "game",
+    "url": "Users/Public/Documents/DOS Bundles/skyroads.jsdos",
+    "category": "Game",
+    "h1": "SkyRoads",
+    "title": "SkyRoads — DOS Game in Olamov OS",
+    "description": "Play SkyRoads, the classic DOS racer, inside the Olamov retro browser desktop."
+  },
+  {
+    "path": "/games/quake3",
+    "kind": "game",
+    "app": "Quake3",
+    "category": "Game",
+    "h1": "Quake III Arena",
+    "title": "Quake III Arena — in Olamov OS",
+    "description": "Launch Quake III Arena inside the Olamov retro browser desktop."
+  }
+]

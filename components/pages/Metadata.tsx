@@ -1,5 +1,6 @@
 import { memo, useMemo } from "react";
 import Head from "next/head";
+import { useDynamicSeo } from "components/pages/hooks/useDynamicSeo";
 import { useFaviconAndTitle } from "components/pages/hooks/useFaviconAndTitle";
 import { useCursor } from "components/pages/hooks/useCursor";
 import desktopIcons from "public/.index/desktopIcons.json";
@@ -26,6 +27,7 @@ const SEO_KEYWORDS = [
 
 const Metadata: FC = () => {
   const { title, Favicon } = useFaviconAndTitle();
+  const { canonical, robots } = useDynamicSeo();
   const CustomCursor = useCursor();
   const PreloadIcons = useMemo(
     () =>
@@ -63,24 +65,34 @@ const Metadata: FC = () => {
         content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, interactive-widget=resizes-content"
         name="viewport"
       />
-      <link href={author.url} rel="canonical" />
+      <link key="canonical" href={canonical} rel="canonical" />
       <meta content={alias} name="application-name" />
-      <meta content={description} name="description" />
+      <meta key="description" content={description} name="description" />
       <meta content={SEO_KEYWORDS} name="keywords" />
-      <meta content="index, follow" name="robots" />
-      <meta content={alias} property="og:title" />
+      <meta key="robots" content={robots} name="robots" />
+      <meta key="og:title" content={alias} property="og:title" />
       <meta content="website" property="og:type" />
-      <meta content={author.url} property="og:url" />
+      <meta key="og:url" content={author.url} property="og:url" />
       <meta content={alias} property="og:site_name" />
       <meta
+        key="og:image"
         content={`${author.url}/Users/Public/Pictures/olamov-default.png`}
         property="og:image"
       />
-      <meta content={description} property="og:description" />
-      <meta content="summary_large_image" name="twitter:card" />
-      <meta content={alias} name="twitter:title" />
-      <meta content={description} name="twitter:description" />
       <meta
+        key="og:description"
+        content={description}
+        property="og:description"
+      />
+      <meta content="summary_large_image" name="twitter:card" />
+      <meta key="twitter:title" content={alias} name="twitter:title" />
+      <meta
+        key="twitter:description"
+        content={description}
+        name="twitter:description"
+      />
+      <meta
+        key="twitter:image"
         content={`${author.url}/Users/Public/Pictures/olamov-default.png`}
         name="twitter:image"
       />

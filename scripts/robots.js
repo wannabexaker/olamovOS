@@ -1,76 +1,69 @@
-const { readdirSync, statSync, writeFileSync } = require("fs");
-const { extname, join } = require("path");
+const { existsSync, statSync, writeFileSync } = require("fs");
+const { join } = require("path");
 const { author } = require("../package.json");
+const routes = require("../utils/seoRoutes.json");
 
-const xmlUrls = [];
+const tzOffsetMs = new Date().getTimezoneOffset() * 60000;
+const toIsoDate = (ms) =>
+  new Date(ms - tzOffsetMs).toISOString().substring(0, 10);
+const today = toIsoDate(Date.now());
 
-const buildAppSitemap = (path) => {
-  readdirSync(path).forEach((entry) => {
-    if (statSync(join(path, entry)).isDirectory()) {
-      xmlUrls.push(
-        `<url><loc>${author.url}/?app=${entry.replace(/-/g, "")}</loc></url>`
-      );
+// lastmod from the backing public file when there is one, else the build date.
+const lastModFor = (route) => {
+  if (route.url) {
+    const filePath = join("public", route.url);
+
+    if (existsSync(filePath)) {
+      return toIsoDate(statSync(filePath).mtime.getTime());
     }
-  });
+  }
+
+  return today;
 };
 
-const buildFileSitemap = (path, excludePaths, callback) => {
-  const publicPath = join("public/", path);
+const urlEntry = (route) => {
+  const loc = `${author.url}${route.path}`;
+  const lastmod = lastModFor(route);
 
-  readdirSync(publicPath).forEach((entry) => {
-    const entryPath = join(path, entry);
-    const urlEntryPath = entryPath.replace(/\\/g, "/");
-    const stats = statSync(join(publicPath, entry));
+  if (route.image && route.url) {
+    const imageLoc = `${author.url}/${encodeURI(route.url)}`;
 
-    if (stats.isDirectory()) {
-      if (!excludePaths.includes(urlEntryPath)) {
-        buildFileSitemap(entryPath, excludePaths, callback);
-      }
-    } else if (![".ini", ".url"].includes(extname(entry).toLowerCase())) {
-      const encodedUrlEntryPath = encodeURI(urlEntryPath).replace(/'/g, "%27");
+    return `<url><loc>${loc}</loc><image:image><image:loc>${imageLoc}</image:loc></image:image><lastmod>${lastmod}</lastmod></url>`;
+  }
 
-      xmlUrls.push(
-        callback(
-          `${author.url}/?url=${encodedUrlEntryPath}`,
-          new Date(stats.mtime - new Date().getTimezoneOffset() * 60000)
-            .toISOString()
-            .substring(0, 10),
-          `${author.url}/${encodedUrlEntryPath}`
-        )
-      );
-    }
-  });
+  return `<url><loc>${loc}</loc><lastmod>${lastmod}</lastmod></url>`;
 };
-
-buildAppSitemap("components/apps");
-
-buildFileSitemap(
-  "Users/Public/Documents",
-  [],
-  (path, mtime) => `<url><loc>${path}</loc><lastmod>${mtime}</lastmod></url>`
-);
-
-buildFileSitemap(
-  "Users/Public/Pictures",
-  ["Users/Public/Pictures/Blog"],
-  (path, mtime, url) =>
-    `<url><loc>${path}</loc><image:image><image:loc>${url}</image:loc></image:image><lastmod>${mtime}</lastmod></url>`
-);
 
 writeFileSync(
   "public/sitemap.xml",
-  `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">${xmlUrls.join(
-    ""
-  )}</urlset>`,
-  {
-    flag: "w",
-  }
+  `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">${routes
+    .map(urlEntry)
+    .join("")}</urlset>`,
+  { flag: "w" }
 );
 
-writeFileSync(
-  "public/robots.txt",
-  `User-agent: *\nAllow: /\n\nSitemap: ${author.url}/sitemap.xml\n`,
-  {
-    flag: "w",
-  }
-);
+// NOTE: ?app= / ?url= are intentionally NOT disallowed. Those legacy URLs are
+// de-indexed via client-side noindex + canonical -> clean route, which only
+// works if crawlers are allowed to fetch and SEE those tags. Blocking them in
+// robots would freeze already-indexed ones as "indexed though blocked".
+// Only pure tracking params, source maps and raw JSON data files are blocked.
+// CSS/JS/fonts/images stay open so crawlers can render. AI crawlers are allowed.
+const robotsTxt = [
+  "User-agent: *",
+  "Allow: /",
+  "",
+  "Disallow: /*?utm_",
+  "Disallow: /*?ref=",
+  "Disallow: /*?source=",
+  "Disallow: /*?debug=",
+  "Disallow: /*?preview=",
+  "Disallow: /*?dev=",
+  "Disallow: /*?state=",
+  "Disallow: /*.json$",
+  "Disallow: /*.map$",
+  "",
+  `Sitemap: ${author.url}/sitemap.xml`,
+  "",
+].join("\n");
+
+writeFileSync("public/robots.txt", robotsTxt, { flag: "w" });

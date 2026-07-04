@@ -1,24 +1,15 @@
 import { memo } from "react";
-import AppsLoader from "components/system/Apps/AppsLoader";
-import Desktop from "components/system/Desktop";
-import Taskbar from "components/system/Taskbar";
-import useGlobalErrorHandler from "hooks/useGlobalErrorHandler";
-import useGlobalKeyboardShortcuts from "hooks/useGlobalKeyboardShortcuts";
-import useIFrameFocuser from "hooks/useIFrameFocuser";
-import useUrlLoader from "hooks/useUrlLoader";
+import OlamovDesktop from "components/pages/OlamovDesktop";
+import SeoContent from "components/pages/seo/SeoContent";
+import { type PublicRoute, getRouteByPath } from "utils/publicRoutes";
 
-const Index = (): React.ReactElement => {
-  useIFrameFocuser();
-  useUrlLoader();
-  useGlobalKeyboardShortcuts();
-  useGlobalErrorHandler();
+const HOME_ROUTE = getRouteByPath("/") as PublicRoute;
 
-  return (
-    <Desktop>
-      <Taskbar />
-      <AppsLoader />
-    </Desktop>
-  );
-};
+const Index = (): React.ReactElement => (
+  <>
+    <OlamovDesktop />
+    <SeoContent route={HOME_ROUTE} />
+  </>
+);
 
 export default memo(Index);

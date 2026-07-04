@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+    
+  <defs>
+    <clipPath id="clip"><rect x="24" y="24" width="464" height="464" rx="104"/></clipPath>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8a2be2"/>
+      <stop offset="0.55" stop-color="#5b17b0"/>
+      <stop offset="1" stop-color="#360a70"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+    <defs>
+     <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+       <stop offset="0" stop-color="#ff5fa2"/><stop offset="0.5" stop-color="#ff2d95"/><stop offset="1" stop-color="#ffd23f"/>
+     </linearGradient>
+     <clipPath id="sunclip"><circle cx="256" cy="242" r="132"/></clipPath>
+   </defs>
+    <g clip-path="url(#clip)">
+      <rect x="24" y="24" width="464" height="464" fill="url(#tile)"/>
+      <rect x="24" y="24" width="464" height="230" fill="url(#gloss)"/>
+      <circle cx="256" cy="242" r="132" fill="url(#sun)"/>
+   <g clip-path="url(#sunclip)">
+     <rect x="110" y="296" width="292" height="9" fill="#360a70"/>
+     <rect x="110" y="320" width="292" height="12" fill="#360a70"/>
+     <rect x="110" y="348" width="292" height="16" fill="#360a70"/>
+     <rect x="110" y="380" width="292" height="24" fill="#360a70"/>
+   </g>
+   <rect x="86" y="410" width="340" height="7" rx="3.5" fill="#ff2d95"/>
+    </g>
+    <rect x="24" y="24" width="464" height="464" rx="104" fill="none" stroke="#cc00ff" stroke-opacity="0.55" stroke-width="8"/>
+    <rect x="28" y="28" width="456" height="456" rx="100" fill="none" stroke="#1a0033" stroke-opacity="0.5" stroke-width="3"/>
+  </svg>

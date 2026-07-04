@@ -54,6 +54,16 @@ const directory: Processes = {
     libs: ["/Program Files/ClassiCube/ClassiCube.js"],
     title: "ClassiCube",
   },
+  Cypher: {
+    Component: dynamic(() => import("components/apps/ExternalApp")),
+    backgroundColor: "#0d0b14",
+    defaultSize: {
+      height: 660,
+      width: 900,
+    },
+    icon: "/System/Icons/olamov-cypher.png",
+    title: "Cypher",
+  },
   DXBall: {
     Component: dynamic(() => import("components/apps/DX-Ball")),
     backgroundColor: "#000",
@@ -93,6 +103,16 @@ const directory: Processes = {
     libs: ["/Program Files/EmulatorJs/loader.js"],
     lockAspectRatio: true,
     title: "Emulator",
+  },
+  EyeInTheSky: {
+    Component: dynamic(() => import("components/apps/ExternalApp")),
+    backgroundColor: "#0a0010",
+    defaultSize: {
+      height: 600,
+      width: 960,
+    },
+    icon: "/System/Icons/olamov-eye.png",
+    title: "The Eye in the Sky",
   },
   FileExplorer: {
     Component: dynamic(() => import("components/apps/FileExplorer")),
@@ -172,6 +192,16 @@ const directory: Processes = {
     ],
     icon: "/System/Icons/olamov-monaco.png",
     title: "Monaco Editor",
+  },
+  MyProjects: {
+    Component: dynamic(() => import("components/apps/MyProjects")),
+    backgroundColor: "#0d0720",
+    defaultSize: {
+      height: 580,
+      width: 820,
+    },
+    icon: "/System/Icons/olamov-projects.png",
+    title: "My Projects",
   },
   Notepad: {
     Component: dynamic(() => import("components/apps/Notepad")),
@@ -254,6 +284,16 @@ const directory: Processes = {
     libs: ["/Program Files/Quake3/Quake3Game.js"],
     lockAspectRatio: true,
     title: "Quake III Arena",
+  },
+  Radevu: {
+    Component: dynamic(() => import("components/apps/ExternalApp")),
+    backgroundColor: "#ffffff",
+    defaultSize: {
+      height: 780,
+      width: 480,
+    },
+    icon: "/System/Icons/olamov-radevu.png",
+    title: "Radevu",
   },
   Ruffle: {
     Component: dynamic(() => import("components/apps/Ruffle")),
@@ -403,6 +443,16 @@ const directory: Processes = {
     libs: ["/Program Files/Virtual x86/libv86.js"],
     preferProcessIcon: true,
     title: "Virtual x86",
+  },
+  VCHub: {
+    Component: dynamic(() => import("components/apps/ExternalApp")),
+    backgroundColor: "#101018",
+    defaultSize: {
+      height: 700,
+      width: 1000,
+    },
+    icon: "/System/Icons/olamov-vchub.png",
+    title: "VC Hub",
   },
   VideoPlayer: {
     Component: dynamic(() => import("components/apps/VideoPlayer")),

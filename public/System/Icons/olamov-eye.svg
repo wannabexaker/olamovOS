@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+    
+  <defs>
+    <clipPath id="clip"><rect x="24" y="24" width="464" height="464" rx="104"/></clipPath>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8a2be2"/>
+      <stop offset="0.55" stop-color="#5b17b0"/>
+      <stop offset="1" stop-color="#360a70"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+    <defs>
+     <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+       <stop offset="0" stop-color="#ffe9a8"/><stop offset="1" stop-color="#f0a500"/>
+     </linearGradient>
+     <radialGradient id="iris" cx="0.5" cy="0.5" r="0.5">
+       <stop offset="0" stop-color="#9b5cff"/><stop offset="0.6" stop-color="#6600cc"/><stop offset="1" stop-color="#2a0a5e"/>
+     </radialGradient>
+     <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+       <stop offset="0" stop-color="#ffcf3f" stop-opacity="0.45"/><stop offset="1" stop-color="#ffcf3f" stop-opacity="0"/>
+     </radialGradient>
+   </defs>
+    <g clip-path="url(#clip)">
+      <rect x="24" y="24" width="464" height="464" fill="url(#tile)"/>
+      <rect x="24" y="24" width="464" height="230" fill="url(#gloss)"/>
+      <circle cx="256" cy="262" r="184" fill="url(#glow)"/>
+   <line x1="256.0" y1="64.0" x2="256.0" y2="26.0" stroke="url(#gold)" stroke-width="12" stroke-linecap="round"/><line x1="396.0" y1="122.0" x2="422.9" y2="95.1" stroke="url(#gold)" stroke-width="12" stroke-linecap="round"/><line x1="454.0" y1="262.0" x2="492.0" y2="262.0" stroke="url(#gold)" stroke-width="12" stroke-linecap="round"/><line x1="396.0" y1="402.0" x2="422.9" y2="428.9" stroke="url(#gold)" stroke-width="12" stroke-linecap="round"/><line x1="256.0" y1="460.0" x2="256.0" y2="498.0" stroke="url(#gold)" stroke-width="12" stroke-linecap="round"/><line x1="116.0" y1="402.0" x2="89.1" y2="428.9" stroke="url(#gold)" stroke-width="12" stroke-linecap="round"/><line x1="58.0" y1="262.0" x2="20.0" y2="262.0" stroke="url(#gold)" stroke-width="12" stroke-linecap="round"/><line x1="116.0" y1="122.0" x2="89.1" y2="95.1" stroke="url(#gold)" stroke-width="12" stroke-linecap="round"/>
+   <path d="M120,262 Q256,150 392,262 Q256,374 120,262 Z" fill="#fff6da" stroke="url(#gold)" stroke-width="14" stroke-linejoin="round"/>
+   <circle cx="256" cy="262" r="66" fill="url(#iris)"/>
+   <circle cx="256" cy="262" r="30" fill="#140a2e"/>
+   <circle cx="236" cy="242" r="13" fill="#ffffff" fill-opacity="0.9"/>
+    </g>
+    <rect x="24" y="24" width="464" height="464" rx="104" fill="none" stroke="#cc00ff" stroke-opacity="0.55" stroke-width="8"/>
+    <rect x="28" y="28" width="456" height="456" rx="100" fill="none" stroke="#1a0033" stroke-opacity="0.5" stroke-width="3"/>
+  </svg>
