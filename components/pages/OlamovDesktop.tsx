@@ -1,6 +1,7 @@
 import { memo } from "react";
 import AppsLoader from "components/system/Apps/AppsLoader";
 import Desktop from "components/system/Desktop";
+import ProjectDock from "components/system/ProjectDock";
 import Taskbar from "components/system/Taskbar";
 import useGlobalErrorHandler from "hooks/useGlobalErrorHandler";
 import useGlobalKeyboardShortcuts from "hooks/useGlobalKeyboardShortcuts";
@@ -19,6 +20,7 @@ const OlamovDesktop = (): React.ReactElement => {
     <Desktop>
       <Taskbar />
       <AppsLoader />
+      <ProjectDock />
     </Desktop>
   );
 };
