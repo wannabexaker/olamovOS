@@ -24,6 +24,11 @@ const types = {
     process: ["Chess", ...TEXT_EDITORS],
     type: "Portable Game Notation File",
   },
+  Commodore64: {
+    icon: "olamov-emulator",
+    process: ["Commodore64"],
+    type: "Commodore 64 Disk Image",
+  },
   DiscImage: {
     icon: "image",
     process: ["V86"],
@@ -127,6 +132,8 @@ const types = {
 const extensions: Record<string, Extension> = {
   ".asx": types.AudioPlaylist,
   ".bin": types.DiscImage,
+  ".crt": types.Commodore64,
+  ".d64": types.Commodore64,
   ".dsk": types.DiscImage,
   ".exe": types.Application,
   ".htm": types.HtmlDocument,
@@ -142,11 +149,14 @@ const extensions: Record<string, Extension> = {
   ".pdf": types.PdfDocument,
   ".pgn": types.ChessGame,
   ".pls": types.AudioPlaylist,
+  ".prg": types.Commodore64,
   ".py": types.PythonFile,
   ".rtf": types.WysiwygHtmlDocument,
   ".spl": types.FutureSplash,
   ".svg": types.SvgFile,
   ".swf": types.ShockwaveFlash,
+  ".t64": types.Commodore64,
+  ".tap": types.Commodore64,
   ".tic": types.Tic80,
   ".ttf": types.Font,
   ".txt": {

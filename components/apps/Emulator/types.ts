@@ -55,6 +55,7 @@ declare global {
     EJS_player?: string;
     EJS_startOnLoaded?: boolean;
     EJS_terminate?: () => void;
+    EJS_volume?: number;
     FS: unknown;
     GL?: {
       newRenderingFrameStarted: () => void;

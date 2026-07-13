@@ -54,6 +54,18 @@ const directory: Processes = {
     libs: ["/Program Files/ClassiCube/ClassiCube.js"],
     title: "ClassiCube",
   },
+  Commodore64: {
+    Component: dynamic(() => import("components/apps/Commodore64")),
+    backgroundColor: "#4632A0",
+    defaultSize: {
+      height: 480,
+      width: 640,
+    },
+    icon: "/System/Icons/olamov-emulator.png",
+    libs: ["https://cdn.emulatorjs.org/stable/data/loader.js"],
+    lockAspectRatio: true,
+    title: "Commodore 64",
+  },
   Cypher: {
     Component: dynamic(() => import("components/apps/ExternalApp")),
     backgroundColor: "#0d0b14",

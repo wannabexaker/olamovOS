@@ -36,14 +36,16 @@ export const setMasterAudio = (volume: number, muted: boolean): void => {
   }
 };
 
-export const patchAudioContextOnce = (): void => {
-  if (patched || typeof window === "undefined") return;
-  patched = true;
+type AudioWindow = Window & {
+  AudioContext?: typeof AudioContext;
+  __olamovAudioPatched?: boolean;
+  webkitAudioContext?: typeof AudioContext;
+};
 
-  const win = window as unknown as {
-    AudioContext?: typeof AudioContext;
-    webkitAudioContext?: typeof AudioContext;
-  };
+// Replace a window's AudioContext constructor with one that inserts a master
+// GainNode we own. Shared by the main-window patch and per-iframe patches so
+// every context — wherever it lives — routes through the same masterGains set.
+const patchWindow = (win: AudioWindow): void => {
   const Original = win.AudioContext || win.webkitAudioContext;
 
   if (typeof Original !== "function") return;
@@ -85,9 +87,32 @@ export const patchAudioContextOnce = (): void => {
   Patched.prototype = Original.prototype;
 
   try {
+    // eslint-disable-next-line no-param-reassign
     if (win.AudioContext) win.AudioContext = Patched;
+    // eslint-disable-next-line no-param-reassign
     if (win.webkitAudioContext) win.webkitAudioContext = Patched;
   } catch {
     // If the global is read-only, fall back to native (no global control).
   }
+};
+
+export const patchAudioContextOnce = (): void => {
+  if (patched || typeof window === "undefined") return;
+  patched = true;
+
+  patchWindow(window as AudioWindow);
+};
+
+// Apps that render into an isolated <iframe> (EmulatorJS, Commodore 64) have
+// their own window and therefore their own AudioContext, which the main-window
+// patch never touches. Patch that window too — before the emulator boots — so
+// the global volume slider reaches it. Guarded per-window so a reused frame is
+// not double-patched.
+export const patchAudioContextForWindow = (win: Window | undefined): void => {
+  const frameWindow = win as AudioWindow | undefined;
+
+  if (!frameWindow || frameWindow.__olamovAudioPatched) return;
+  frameWindow.__olamovAudioPatched = true;
+
+  patchWindow(frameWindow);
 };
