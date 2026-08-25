@@ -9,6 +9,7 @@ export type PublicRoute = {
   h1?: string;
   image?: boolean;
   kind: PublicRouteKind;
+  ogImage?: string;
   path: string;
   title?: string;
   url?: string;

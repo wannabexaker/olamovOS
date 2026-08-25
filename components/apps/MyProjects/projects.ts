@@ -57,6 +57,16 @@ export const PROJECTS: Project[] = [
     tags: ["Music", "Real-time", "Next.js"],
     url: "https://cypher.olamov.com/",
   },
+  {
+    accent: "#7c5cff",
+    appId: "FitSentry",
+    description: "",
+    embeddable: false,
+    icon: "/System/Icons/olamov-fitsentry.png",
+    name: "Fit Sentry",
+    tags: ["Android", "Google Play"],
+    url: "https://play.google.com/store/apps/details?id=com.fitsentry.app",
+  },
 ];
 
 export const getProjectByAppId = (appId: string): Project | undefined =>

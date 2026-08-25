@@ -83,6 +83,7 @@
     "app": "MyProjects",
     "category": "Portfolio",
     "h1": "My Projects",
+    "ogImage": "/System/OG/my-projects.png",
     "title": "My Projects — Portfolio inside Olamov OS",
     "description": "A showcase of projects built by the maker of Olamov OS — a booking SaaS, a slot game, a GTA VI tool and a rap-battle platform, each runnable right in the browser."
   },
@@ -92,6 +93,7 @@
     "app": "Radevu",
     "category": "Project",
     "h1": "Radevu",
+    "ogImage": "/System/OG/radevu.png",
     "title": "Radevu — Appointment Booking SaaS | Olamov Projects",
     "description": "Radevu is an appointment-booking platform for small service businesses: online booking, customer history and reminders. Launch it inside Olamov OS."
   },
@@ -101,6 +103,7 @@
     "app": "EyeInTheSky",
     "category": "Project",
     "h1": "The Eye in the Sky",
+    "ogImage": "/System/OG/eye.png",
     "title": "The Eye in the Sky — Cluster-Pays Slot Game | Olamov Projects",
     "description": "A cluster-pays slot game built with PixiJS, themed around a temple ritual with cascading wins. Play it inside Olamov OS."
   },
@@ -110,6 +113,7 @@
     "app": "VCHub",
     "category": "Project",
     "h1": "VC Hub",
+    "ogImage": "/System/OG/vc-hub.png",
     "title": "VC Hub — GTA VI Prices, Stats & Value | Olamov Projects",
     "description": "VC Hub is a GTA VI price, stats and value-for-money database for Vice City. Browse it inside Olamov OS."
   },
@@ -119,6 +123,7 @@
     "app": "Cypher",
     "category": "Project",
     "h1": "Cypher",
+    "ogImage": "/System/OG/cypher.png",
     "title": "Cypher — Rap Battle & Live Voting | Olamov Projects",
     "description": "Cypher is a rap & hip-hop battle platform: host rooms with shareable codes, submit tracks and let the crowd vote live. Explore it inside Olamov OS."
   },

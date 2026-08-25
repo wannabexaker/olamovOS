@@ -5,7 +5,6 @@ import StyledMyProjects, {
 import { type Project, PROJECTS } from "components/apps/MyProjects/projects";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import { useProcesses } from "contexts/process";
-import Icon from "styles/common/Icon";
 
 const openExternal = (url: string): void => {
   window.open(url, "_blank", "noopener,noreferrer");
@@ -33,10 +32,21 @@ const MyProjects: FC<ComponentProcessProps> = () => {
       <ul>
         {PROJECTS.map((project) => (
           <ProjectCard key={project.appId} $accent={project.accent}>
-            <Icon imgSize={64} src={project.icon} />
+            {/* Plain img with an existing 96x96 variant (shown at 56px) so the
+                tile is never hidden by the Icon component's load-gated visibility. */}
+            <img
+              alt=""
+              className="tile"
+              height={56}
+              src={project.icon.replace(
+                "/System/Icons/",
+                "/System/Icons/96x96/"
+              )}
+              width={56}
+            />
             <div className="meta">
               <h2>{project.name}</h2>
-              <p>{project.description}</p>
+              {project.description && <p>{project.description}</p>}
               <div className="tags">
                 {project.tags.map((tag) => (
                   <span key={tag}>{tag}</span>
@@ -49,17 +59,19 @@ const MyProjects: FC<ComponentProcessProps> = () => {
                 onClick={() => launch(project)}
                 type="button"
               >
-                Open
+                {project.embeddable ? "Open" : "Open ↗"}
               </button>
-              <button
-                aria-label={`Open ${project.name} in a new tab`}
-                className="ghost"
-                onClick={() => openExternal(project.url)}
-                title="Open in new tab"
-                type="button"
-              >
-                ↗
-              </button>
+              {project.embeddable && (
+                <button
+                  aria-label={`Open ${project.name} in a new tab`}
+                  className="ghost"
+                  onClick={() => openExternal(project.url)}
+                  title="Open in new tab"
+                  type="button"
+                >
+                  ↗
+                </button>
+              )}
             </div>
           </ProjectCard>
         ))}

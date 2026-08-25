@@ -16,8 +16,11 @@ const RouteSeo: FC<RouteSeoProps> = ({ route }) => {
   const canonical = `${author.url}${route.path}`;
   const title = route.title || "Olamov OS";
   const description = route.description || "";
-  const ogImage =
-    route.image && route.url
+  // A purpose-built share card wins; gallery routes fall back to the wallpaper
+  // itself; everything else uses the site-wide default.
+  const ogImage = route.ogImage
+    ? `${author.url}${route.ogImage}`
+    : route.image && route.url
       ? `${author.url}/${encodeURI(route.url)}`
       : DEFAULT_OG_IMAGE;
 
@@ -36,6 +39,16 @@ const RouteSeo: FC<RouteSeoProps> = ({ route }) => {
         />
         <meta key="og:url" content={canonical} property="og:url" />
         <meta key="og:image" content={ogImage} property="og:image" />
+        {route.ogImage && (
+          <meta key="og:image:width" content="1200" property="og:image:width" />
+        )}
+        {route.ogImage && (
+          <meta
+            key="og:image:height"
+            content="630"
+            property="og:image:height"
+          />
+        )}
         <meta key="twitter:title" content={title} name="twitter:title" />
         <meta
           key="twitter:description"
