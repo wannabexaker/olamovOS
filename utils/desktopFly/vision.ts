@@ -273,7 +273,10 @@ export class WallpaperEye {
     const background =
       style.getPropertyValue("--after-background") ||
       style.getPropertyValue("--before-background");
-    const [, url] = /url\("?([^")]+)"?\)/.exec(background) || [];
+    const [, escapedUrl] = /url\("?([^")]+)"?\)/.exec(background) || [];
+    // The value is set via CSS.escape, so undo it (as useWallpaper does) or a
+    // blob: url gets requested as a relative path and 404s.
+    const url = escapedUrl?.replace(/\\/g, "");
 
     if (!url) {
       this.data = undefined;
