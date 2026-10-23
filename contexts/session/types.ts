@@ -1,8 +1,9 @@
 import { type Position } from "react-rnd";
+import { type Columns } from "components/system/Files/FileManager/Columns/constants";
 import { type SortBy } from "components/system/Files/FileManager/useSortBy";
+import { type FileManagerViewNames } from "components/system/Files/Views";
 import { type Size } from "components/system/Window/RndWindow/useResizable";
 import { type ThemeName } from "styles/themes";
-import { type FileManagerViewNames } from "components/system/Files/Views";
 
 declare global {
   interface Window {
@@ -13,6 +14,8 @@ declare global {
 export type UpdateFiles = (newFile?: string, oldFile?: string) => Promise<void>;
 
 export type WindowState = {
+  columns?: Columns;
+  maximized?: boolean;
   position?: Position;
   size?: Size;
 };
@@ -21,7 +24,7 @@ export type WindowStates = Record<string, WindowState>;
 
 export type WallpaperFit = "center" | "fill" | "fit" | "stretch" | "tile";
 
-type SortOrder = [string[], SortBy?, boolean?];
+export type SortOrder = [string[], SortBy?, boolean?];
 
 export type SortOrders = Record<string, SortOrder>;
 
@@ -39,14 +42,14 @@ export type IconPosition = {
 export type IconPositions = Record<string, IconPosition>;
 
 export type SessionData = {
-  aiEnabled: boolean;
-  audioMuted: boolean;
-  audioVolume: number;
+  aiEnabled?: boolean;
+  audioMuted?: boolean;
+  audioVolume?: number;
   clockSource: ClockSource;
   closeEffect: string;
   cursor: string | undefined;
   iconPositions: IconPositions;
-  lazySheep?: boolean;
+  lazyZoo?: boolean;
   recentFiles: RecentFiles;
   runHistory: string[];
   sortOrders: SortOrders;
@@ -58,11 +61,17 @@ export type SessionData = {
 };
 
 export type SessionContextState = SessionData & {
+  audioMuted: boolean;
+  audioVolume: number;
   foregroundId: string;
+  sessionLoaded: boolean;
+  stackOrder: string[];
+};
+
+export type SessionContextActions = {
   prependToStack: (id: string) => void;
   removeFromStack: (id: string) => void;
-  sessionLoaded: boolean;
-  setAiEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  setAiEnabled: React.Dispatch<React.SetStateAction<boolean | undefined>>;
   setAudioMuted: React.Dispatch<React.SetStateAction<boolean>>;
   setAudioVolume: React.Dispatch<React.SetStateAction<number>>;
   setClockSource: React.Dispatch<React.SetStateAction<ClockSource>>;
@@ -74,7 +83,7 @@ export type SessionContextState = SessionData & {
   setRunHistory: React.Dispatch<React.SetStateAction<string[]>>;
   setSortOrder: (
     directory: string,
-    order: string[] | ((currentSortOrder: string[]) => string[]),
+    order: ((currentSortOrder: string[]) => string[]) | string[],
     sortBy?: SortBy,
     ascending?: boolean
   ) => void;
@@ -82,6 +91,5 @@ export type SessionContextState = SessionData & {
   setViews: React.Dispatch<React.SetStateAction<Views>>;
   setWallpaper: (image: string, fit?: WallpaperFit) => void;
   setWindowStates: React.Dispatch<React.SetStateAction<WindowStates>>;
-  stackOrder: string[];
   updateRecentFiles: (url: string, pid: string, title?: string) => void;
 };

@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
 import { getProcessByFileExtension } from "components/system/Files/FileEntry/functions";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
+import { useFileSystemActions, useFs } from "contexts/fileSystem";
+import { useProcessesActions } from "contexts/process";
 import processDirectory from "contexts/process/directory";
-import { getExtension, getSearchParam } from "utils/functions";
+import { useSessionLoaded } from "contexts/session";
+import { getExtension, getSearchParam, isYouTubeUrl } from "utils/functions";
 import { getRouteByPath } from "utils/publicRoutes";
 
 const isBrowserUrl = (url: string): boolean =>
@@ -12,12 +13,22 @@ const isBrowserUrl = (url: string): boolean =>
   url.startsWith("chrome://");
 
 const useUrlLoader = (): void => {
-  const { exists, fs, stat } = useFileSystem();
-  const { open } = useProcesses();
+  const { exists, stat } = useFileSystemActions();
+  const fs = useFs();
+  const { open } = useProcessesActions();
+  const sessionLoaded = useSessionLoaded();
   const loadedInitialAppRef = useRef(false);
 
   useEffect(() => {
-    if (loadedInitialAppRef.current || !fs || !exists || !open) return;
+    if (
+      loadedInitialAppRef.current ||
+      !fs ||
+      !exists ||
+      !open ||
+      !sessionLoaded
+    ) {
+      return;
+    }
 
     loadedInitialAppRef.current = true;
 
@@ -30,15 +41,10 @@ const useUrlLoader = (): void => {
     const loadInitialApp = async (initialApp: string): Promise<void> => {
       if (!initialApp) return;
 
-      let urlExists = false;
-
-      try {
-        urlExists =
-          (initialApp === "Browser" && isBrowserUrl(url)) ||
-          (await exists(url));
-      } catch {
-        // Ignore error checking if url exists
-      }
+      const urlExists =
+        (initialApp === "Browser" && isBrowserUrl(url)) ||
+        (initialApp === "VideoPlayer" && isYouTubeUrl(url)) ||
+        (await exists(url).catch(() => false));
 
       if (initialApp === "FileExplorer" && url && !urlExists) return;
 
@@ -54,7 +60,9 @@ const useUrlLoader = (): void => {
 
       loadInitialApp(lcAppNames[app.toLowerCase()]);
     } else if (url) {
-      if (isBrowserUrl(url)) {
+      if (isYouTubeUrl(url)) {
+        loadInitialApp("VideoPlayer");
+      } else if (isBrowserUrl(url)) {
         loadInitialApp("Browser");
       } else {
         try {
@@ -70,7 +78,7 @@ const useUrlLoader = (): void => {
         }
       }
     }
-  }, [exists, fs, open, stat]);
+  }, [exists, fs, open, sessionLoaded, stat]);
 };
 
 export default useUrlLoader;

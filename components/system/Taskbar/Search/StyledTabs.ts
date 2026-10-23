@@ -13,11 +13,23 @@ const StyledTabs = styled.ol`
 
   li {
     color: ${({ theme }) => theme.colors.text};
-    padding: 15px 13px 14px;
+
+    button {
+      align-items: flex-start;
+      background-color: transparent;
+      color: inherit;
+      display: flex;
+      font: inherit;
+      height: 100%;
+      padding: 15px 13px 14px;
+    }
 
     &.active {
-      border-bottom: 4px solid ${({ theme }) => theme.colors.highlight};
       color: ${({ theme }) => theme.colors.highlight};
+
+      button {
+        border-bottom: 4px solid ${({ theme }) => theme.colors.highlight};
+      }
     }
 
     &:hover {

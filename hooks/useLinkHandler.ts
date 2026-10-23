@@ -1,10 +1,9 @@
 import { relative } from "path";
-import { useCallback } from "react";
 import { isCorsUrl } from "components/apps/TinyMCE/functions";
 import { getProcessByFileExtension } from "components/system/Files/FileEntry/functions";
-import { useProcesses } from "contexts/process";
-import { haltEvent, isYouTubeUrl, getExtension } from "utils/functions";
-import { useSession } from "contexts/session";
+import { useProcessesActions } from "contexts/process";
+import { useSessionActions } from "contexts/session";
+import { getExtension, haltEvent, isYouTubeUrl } from "utils/functions";
 
 type LinkHandler = (
   event: Event,
@@ -14,44 +13,39 @@ type LinkHandler = (
 ) => void;
 
 export const useLinkHandler = (): LinkHandler => {
-  const { open } = useProcesses();
-  const { updateRecentFiles } = useSession();
+  const { open } = useProcessesActions();
+  const { updateRecentFiles } = useSessionActions();
 
-  return useCallback<LinkHandler>(
-    (event, rawUrl, pathName, title) => {
-      haltEvent(event);
+  return (event, rawUrl, pathName, title) => {
+    haltEvent(event);
 
-      const url = rawUrl.replace(/^http:/i, "https:");
+    const url = rawUrl.replace(/^http:/i, "https:");
 
-      if (isYouTubeUrl(url)) open("VideoPlayer", { url });
-      else if (isCorsUrl(url)) open("Browser", { initialTitle: title, url });
-      else if (
-        !pathName ||
-        relative(
-          decodeURI(
-            (url.startsWith("/") ? url : `/${url}`).replace(
-              window.location.origin,
-              ""
-            )
-          ),
-          decodeURI(pathName)
-        ) === ""
-      ) {
-        const defaultProcess = getProcessByFileExtension(
-          getExtension(pathName)
-        );
+    if (isYouTubeUrl(url)) open("VideoPlayer", { url });
+    else if (isCorsUrl(url)) open("Browser", { initialTitle: title, url });
+    else if (
+      !pathName ||
+      relative(
+        decodeURI(
+          (url.startsWith("/") ? url : `/${url}`).replace(
+            window.location.origin,
+            ""
+          )
+        ),
+        decodeURI(pathName)
+      ) === ""
+    ) {
+      const defaultProcess = getProcessByFileExtension(getExtension(pathName));
 
-        if (defaultProcess) {
-          const pathUrl = decodeURI(pathName);
+      if (defaultProcess) {
+        const pathUrl = decodeURI(pathName);
 
-          open(defaultProcess, { url: pathUrl });
+        open(defaultProcess, { url: pathUrl });
 
-          if (pathUrl) updateRecentFiles(pathUrl, defaultProcess);
-        }
-      } else {
-        window.open(rawUrl, "_blank", "noopener, noreferrer");
+        if (pathUrl) updateRecentFiles(pathUrl, defaultProcess);
       }
-    },
-    [open, updateRecentFiles]
-  );
+    } else {
+      window.open(rawUrl, "_blank", "noopener, noreferrer");
+    }
+  };
 };

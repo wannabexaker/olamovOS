@@ -9,16 +9,18 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: Install Dependencies
-        run: NODE_OPTIONS='--openssl-legacy-provider' yarn
+        run: yarn
       - name: Run Jest Unit Tests
         run: yarn test
       - name: Build App
         run: yarn build
+      - name: Run Oxlint
+        run: yarn lint
       - name: Install Playwright Browsers
         run: yarn playwright install --with-deps
       - name: Run Playwright E2E Tests

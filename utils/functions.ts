@@ -1,14 +1,11 @@
 import { basename, dirname, extname, join } from "path";
 import { type Position } from "eruda";
-import type HtmlToImage from "html-to-image";
+import type * as HtmlToImage from "html-to-image";
+import { type NavigatorWithMemory } from "components/apps/V86/types";
 import { type DragPosition } from "components/system/Files/FileManager/useDraggableEntries";
 import { type Size } from "components/system/Window/RndWindow/useResizable";
-import { type Processes, type RelativePosition } from "contexts/process/types";
-import {
-  type IconPosition,
-  type IconPositions,
-  type SortOrders,
-} from "contexts/session/types";
+import { type Processes } from "contexts/process/types";
+import { type IconPosition, type IconPositions } from "contexts/session/types";
 import {
   DEFAULT_LOCALE,
   DESKTOP_PATH,
@@ -21,13 +18,13 @@ import {
   MILLISECONDS_IN_SECOND,
   ONE_TIME_PASSIVE_EVENT,
   PACKAGE_DATA,
-  PREVENT_SCROLL,
   SHORTCUT_EXTENSION,
   SUPPORTED_ICON_SIZES,
   TASKBAR_HEIGHT,
   TIMESTAMP_DATE_FORMAT,
   USER_ICON_PATH,
 } from "utils/constants";
+import { focusDesktop, focusWithin } from "utils/keyboard";
 
 export const bufferToBlob = (buffer: Buffer, type?: string): Blob =>
   new Blob([buffer as BlobPart], type ? { type } : undefined);
@@ -97,11 +94,9 @@ export const getExtension = (url: string): string => {
 };
 
 export const writeTextToClipboard = (text: string): void => {
-  try {
-    navigator.clipboard?.writeText(text);
-  } catch {
+  navigator.clipboard?.writeText(text).catch(() => {
     // Ignore failure to write to clipboard
-  }
+  });
 };
 
 export const sendMouseClick = (target: HTMLElement, count = 1): void => {
@@ -119,10 +114,10 @@ export const toggleShowDesktop = (
   stackOrder: string[],
   minimize: (id: string) => void
 ): void => {
+  const windows = stackOrder.filter((pid) => processes[pid]);
   const restoreWindows =
-    stackOrder.length > 0 &&
-    !stackOrder.some((pid) => !processes[pid]?.minimized);
-  const allWindows = restoreWindows ? [...stackOrder].reverse() : stackOrder;
+    windows.length > 0 && windows.every((pid) => processes[pid]?.minimized);
+  const allWindows = restoreWindows ? [...windows].reverse() : windows;
 
   if (!restoreWindows) visibleWindows = [];
   else if (visibleWindows.length === 0) visibleWindows = allWindows;
@@ -138,9 +133,9 @@ export const toggleShowDesktop = (
 
   if (restoreWindows) {
     requestAnimationFrame(() =>
-      processes[stackOrder[0]]?.componentWindow?.focus(PREVENT_SCROLL)
+      focusWithin(processes[windows[0]]?.componentWindow)
     );
-  }
+  } else focusDesktop();
 };
 
 const imageSrcMap = new Map<string, string>();
@@ -257,6 +252,9 @@ export const imgDataToBuffer = (imageData: ImageData): Buffer => {
 };
 
 export const cleanUpBufferUrl = (url: string): void => URL.revokeObjectURL(url);
+
+export const copyBufferUrl = async (url: string): Promise<string> =>
+  URL.createObjectURL(await (await fetch(url)).blob());
 
 const rowBlank = (imageData: ImageData, width: number, y: number): boolean => {
   for (let x = 0; x < width; ++x) {
@@ -419,8 +417,8 @@ export const getWindowViewport = (): Position => ({
 
 export const calcInitialPosition = (
   { offsetHeight }: HTMLElement,
-  { right = 0, left = 0, top = 0, bottom = 0 } = {} as RelativePosition,
-  { width = 0, height = 0 } = {} as Size
+  { bottom = 0, left = 0, right = 0, top = 0 } = {},
+  { height = 0, width = 0 }: Size = {} as Size
 ): Position => {
   const [vh, vw] = [viewHeight(), viewWidth()];
 
@@ -479,7 +477,7 @@ export const saveUnpositionedDesktopIcons = (
     const unPositionedIcons = [
       ...desktopIconGrid.querySelectorAll("li"),
     ].filter(
-      ({ style: { gridRowStart, gridColumnStart } }) =>
+      ({ style: { gridColumnStart, gridRowStart } }) =>
         !gridRowStart || !gridColumnStart
     );
 
@@ -498,7 +496,7 @@ export const saveUnpositionedDesktopIcons = (
       const rowTopPadding = pxToNum(paddingTop);
       const newIconPositions = Object.fromEntries(
         unPositionedIcons.map((icon) => {
-          const { top, left } = icon.getBoundingClientRect() || {};
+          const { left, top } = icon.getBoundingClientRect() || {};
           const button = icon.querySelector("button") as HTMLButtonElement;
           let name = button?.getAttribute("aria-label") || button?.textContent;
 
@@ -528,11 +526,10 @@ export const updateIconPositionsIfEmpty = (
   url: string,
   gridElement: HTMLElement | null,
   iconPositions: IconPositions,
-  sortOrders: SortOrders
+  fileOrder: string[] = []
 ): IconPositions => {
   if (!gridElement) return iconPositions;
 
-  const [fileOrder = []] = sortOrders[url] || [];
   const newIconPositions: IconPositions = {};
   const gridComputedStyle = window.getComputedStyle(gridElement);
   const gridTemplateRowCount = gridComputedStyle
@@ -556,7 +553,7 @@ export const updateIconPositionsIfEmpty = (
       }
 
       if (gridEntry instanceof HTMLElement) {
-        const { x, y, height, width } = gridEntry.getBoundingClientRect();
+        const { height, width, x, y } = gridEntry.getBoundingClientRect();
 
         newIconPositions[entryUrl] = calcGridDropPosition(gridElement, {
           x: x + width / 2,
@@ -661,7 +658,7 @@ export const updateIconPositions = (
   directory: string,
   gridElement: HTMLElement | null,
   iconPositions: IconPositions,
-  sortOrders: SortOrders,
+  fileOrder: string[] | undefined,
   dragPosition: DragPosition,
   draggedEntries: string[],
   setIconPositions: React.Dispatch<React.SetStateAction<IconPositions>>,
@@ -673,7 +670,7 @@ export const updateIconPositions = (
     directory,
     gridElement,
     iconPositions,
-    sortOrders
+    fileOrder
   );
   const gridDropPosition = calcGridDropPosition(gridElement, dragPosition);
   const conflictingIcon = Object.entries(updatedIconPositions).find(
@@ -843,7 +840,6 @@ let timezoneOffset: number;
 
 export const getTZOffsetISOString = (timestamp?: number): string => {
   let time = timestamp;
-  // eslint-disable-next-line no-undef-init
   let date: Date | undefined = undefined;
 
   if (!time) {
@@ -933,6 +929,62 @@ export const haltEvent = (
   }
 };
 
+let HAS_OFFSCREEN_CANVAS_SUPPORT: boolean;
+
+export const hasOffscreenCanvasSupport = (): boolean => {
+  HAS_OFFSCREEN_CANVAS_SUPPORT ??=
+    typeof window !== "undefined" && "OffscreenCanvas" in window;
+
+  return HAS_OFFSCREEN_CANVAS_SUPPORT;
+};
+
+// Android Chrome decodes JPEGs past a RAM based budget (3MP if low-end, else
+// RAM / 100 pixels) at reduced size, which CSS backgrounds draw squished.
+// deviceMemory is RAM rounded to the nearest power of 2, so assume its floor.
+export const fitImageToDecodeLimit = async (url: string): Promise<string> => {
+  const { deviceMemory } = navigator as NavigatorWithMemory;
+
+  if (
+    !deviceMemory ||
+    !navigator.userAgent.includes("Android") ||
+    !hasOffscreenCanvasSupport()
+  ) {
+    return url;
+  }
+
+  const maxPixels =
+    deviceMemory <= 1
+      ? 3 * 1024 * 1024
+      : (0.75 * deviceMemory * 1024 ** 3) / 100;
+  const image = new Image();
+
+  await new Promise((resolve) => {
+    image.addEventListener("load", resolve, ONE_TIME_PASSIVE_EVENT);
+    image.addEventListener("error", resolve, ONE_TIME_PASSIVE_EVENT);
+    image.src = url;
+  });
+
+  const { naturalHeight, naturalWidth } = image;
+  const pixels = naturalWidth * naturalHeight;
+
+  if (pixels <= maxPixels) return url;
+
+  try {
+    const blob = await (await fetch(url)).blob();
+    const maxSide = Math.floor(
+      Math.max(naturalWidth, naturalHeight) * Math.sqrt(maxPixels / pixels)
+    );
+
+    const resizedUrl = URL.createObjectURL(await resizeImage(blob, maxSide));
+
+    if (url.startsWith("blob:")) cleanUpBufferUrl(url);
+
+    return resizedUrl;
+  } catch {
+    return url;
+  }
+};
+
 export const createOffscreenCanvas = (
   containerElement: HTMLElement,
   devicePixelRatio = 1,
@@ -948,6 +1000,8 @@ export const createOffscreenCanvas = (
   canvas.height = Math.floor(height * devicePixelRatio);
   canvas.width = Math.floor(width * devicePixelRatio);
 
+  canvas.setAttribute("aria-hidden", "true");
+
   containerElement.append(canvas);
 
   return canvas.transferControlToOffscreen();
@@ -962,8 +1016,11 @@ export const clsx = (classes: Record<string, boolean>): string =>
     .map(([className]) => className)
     .join(" ");
 
-export const label = (value: string): React.HTMLAttributes<HTMLElement> => ({
-  "aria-label": value,
+export const label = (
+  value: string,
+  simpleValue?: string
+): React.HTMLAttributes<HTMLElement> => ({
+  "aria-label": simpleValue || value,
   title: value,
 });
 
@@ -972,18 +1029,6 @@ export const isYouTubeUrl = (url: string): boolean =>
   !url.includes("youtube.com/@") &&
   !url.includes("/channel/") &&
   !url.includes("/c/");
-
-export const getYouTubeUrlId = (url: string): string => {
-  try {
-    const { pathname, searchParams } = new URL(url);
-
-    return searchParams.get("v") || pathname.split("/").pop() || "";
-  } catch {
-    // URL parsing failed
-  }
-
-  return "";
-};
 
 export const getMimeType = (url: string, ext?: string): string => {
   switch (ext ? ext.toLowerCase() : getExtension(url)) {
@@ -1077,10 +1122,10 @@ const supportsModulePreload = (): boolean => {
   return HAS_MODULE_PRELOAD_SUPPORT;
 };
 
-let HAS_WEBP_SUPPORT = false;
+let HAS_WEBP_SUPPORT: boolean | undefined;
 
 export const supportsWebp = (): boolean => {
-  if (HAS_WEBP_SUPPORT) return true;
+  if (HAS_WEBP_SUPPORT !== undefined) return HAS_WEBP_SUPPORT;
 
   try {
     HAS_WEBP_SUPPORT = document
@@ -1091,14 +1136,11 @@ export const supportsWebp = (): boolean => {
     // Ignore failure to check for WebP support
   }
 
-  return HAS_WEBP_SUPPORT;
+  return Boolean(HAS_WEBP_SUPPORT);
 };
 
 const supportsImageSrcSet = (): boolean =>
-  Object.prototype.hasOwnProperty.call(
-    HTMLLinkElement.prototype,
-    "imageSrcset"
-  );
+  Object.hasOwn(HTMLLinkElement.prototype, "imageSrcset");
 
 export const preloadImage = (
   image: string,
@@ -1153,7 +1195,6 @@ export const preloadLibs = (libs: string[] = []): void => {
   const scripts = [...document.scripts];
   const preloadedLinks = getPreloadedLinks();
 
-  // eslint-disable-next-line unicorn/no-array-callback-reference
   libs.map(encodeURI).forEach((lib) => {
     if (
       scripts.some((script) => script.src.endsWith(lib)) ||
@@ -1202,12 +1243,12 @@ export const getGifJs = async (): Promise<GIFWithWorkers> => {
 
   return new GIFInstance({
     quality: 10,
-    workerScript: "System/gif.js/gif.worker.js",
     workers: Math.max(Math.floor(navigator.hardwareConcurrency / 4), 1),
+    workerScript: "System/gif.js/gif.worker.js",
   }) as GIFWithWorkers;
 };
 
-export const jsonFetch = async <T extends Record<string, unknown>>(
+export const jsonFetch = async <T extends Record<string, unknown> | unknown[]>(
   url: string,
   options?: RequestInit
 ): Promise<T> => {
@@ -1234,7 +1275,7 @@ export const isBeforeBg = (): boolean =>
     "--before-background-opacity"
   ) === "1";
 
-export const parseBgPosition = (position?: string): `${number}%` | "center" => {
+export const parseBgPosition = (position?: string): "center" | `${number}%` => {
   if (typeof position === "string") {
     const positionNum = Number.parseFloat(position);
 
@@ -1251,6 +1292,17 @@ export const toSorted = <T>(
   compareFn?: (a: T, b: T) => number
 ): T[] => [...array].sort(compareFn);
 
+export const omitEntry = <T>(
+  record: Record<string, T>,
+  key: string
+): Record<string, T> => {
+  const newRecord = { ...record };
+
+  delete newRecord[key];
+
+  return newRecord;
+};
+
 export const notFound = (resource: string): void =>
   // eslint-disable-next-line no-alert
   alert(`Can't find '${resource}'. Check the spelling and try again.`);
@@ -1262,7 +1314,7 @@ export const shouldCaptureDragImage = (
   !isDesktop && (entryCount > 1 || (entryCount === 1 && isSafari()));
 
 export const maybeRequestIdleCallback = (
-  callback: () => void | Promise<void>
+  callback: () => Promise<void> | void
 ): void => {
   if (
     "requestIdleCallback" in window &&

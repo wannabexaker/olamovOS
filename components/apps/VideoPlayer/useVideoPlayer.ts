@@ -1,26 +1,29 @@
 import { basename, join } from "path";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  config,
   CONTROL_BAR_HEIGHT,
   DEFAULT_QUALITY_SIZE,
   VideoResizeKey,
   YT_TYPE,
-  config,
   ytQualitySizeMap,
 } from "components/apps/VideoPlayer/config";
 import {
-  type YouTubeTech,
+  type CodecBox,
+  type ControlBar,
   type SourceObjectWithUrl,
   type VideoPlayer,
   type YouTubePlayer,
-  type ControlBar,
-  type CodecBox,
+  type YouTubeTech,
 } from "components/apps/VideoPlayer/types";
 import { type ContainerHookProps } from "components/system/Apps/AppContainer";
+import { getCoverArt } from "components/system/Files/FileEntry/functions";
 import useTitle from "components/system/Window/useTitle";
 import useWindowSize from "components/system/Window/useWindowSize";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
+import { useFileSystemActions } from "contexts/fileSystem";
+import { useProcess, useProcessesActions } from "contexts/process";
+import { useViewport } from "contexts/viewport";
+import { getFullscreenElement } from "contexts/viewport/useViewportContextState";
 import {
   AUDIO_FILE_EXTENSIONS,
   DESKTOP_PATH,
@@ -37,7 +40,6 @@ import {
   viewHeight,
   viewWidth,
 } from "utils/functions";
-import { getCoverArt } from "components/system/Files/FileEntry/functions";
 
 const useVideoPlayer = ({
   containerRef,
@@ -46,18 +48,16 @@ const useVideoPlayer = ({
   setLoading,
   url,
 }: ContainerHookProps): void => {
-  const { addFile, createPath, readFile, updateFolder } = useFileSystem();
-  const {
-    argument,
-    linkElement,
-    processes: { [id]: { closing = false, componentWindow, libs = [] } = {} },
-    url: setUrl,
-  } = useProcesses();
+  const { addFile, createPath, readFile, updateFolder } =
+    useFileSystemActions();
+  const { argument, linkElement, url: setUrl } = useProcessesActions();
+  const { closing = false, componentWindow, libs = [] } = useProcess(id);
   const { updateWindowSize } = useWindowSize(id);
   const [player, setPlayer] = useState<VideoPlayer>();
   const [ytPlayer, setYtPlayer] = useState<YouTubePlayer>();
   const { prependFileToTitle } = useTitle(id);
-  const cleanUpSource = useCallback((): void => {
+  const { toggleFullscreen: switchFullscreen } = useViewport();
+  const cleanUpSource = (): void => {
     const { src: sources = [] } = player?.getMedia() || {};
 
     if (Array.isArray(sources) && sources.length > 0) {
@@ -67,9 +67,11 @@ const useVideoPlayer = ({
         cleanUpBufferUrl(src);
       }
     }
-  }, [closing, player, url]);
-  const isYT = useMemo(() => isYouTubeUrl(url), [url]);
-  const getSource = useCallback(async () => {
+  };
+  const isYT = isYouTubeUrl(url);
+  const getSource = async (): Promise<
+    SourceObjectWithUrl & { buffer?: Buffer }
+  > => {
     cleanUpSource();
 
     let type = isYT ? YT_TYPE : getMimeType(url) || VIDEO_FALLBACK_MIME_TYPE;
@@ -82,59 +84,59 @@ const useVideoPlayer = ({
       : bufferToUrl(buffer as Buffer, isSafari() ? type : undefined);
 
     return { buffer, src, type, url };
-  }, [cleanUpSource, isYT, readFile, url]);
+  };
   const initializedUrlRef = useRef(false);
   const playerInitialized = useRef(false);
   const codecBox = useRef<CodecBox>(undefined);
   const failedToDecodeUrlRef = useRef("");
-  const canvasMode = useCallback(
-    (enable: boolean, videoPlayer?: VideoPlayer & ControlBar): void => {
-      if (!enable) codecBox.current?.exit?.();
+  const canvasMode = (
+    enable: boolean,
+    videoPlayer?: VideoPlayer & ControlBar
+  ): void => {
+    if (!enable) codecBox.current?.exit?.();
 
-      const videoElement = containerRef.current?.querySelector(
-        "video"
-      ) as HTMLVideoElement;
-      const canvasElement = containerRef.current?.querySelector(
-        "canvas"
-      ) as HTMLCanvasElement;
+    const videoElement = containerRef.current?.querySelector(
+      "video"
+    ) as HTMLVideoElement;
+    const canvasElement = containerRef.current?.querySelector(
+      "canvas"
+    ) as HTMLCanvasElement;
 
-      if (videoElement) {
-        videoElement.style.visibility = enable ? "hidden" : "visible";
-      }
-      if (canvasElement) {
-        canvasElement.style.visibility = enable ? "visible" : "hidden";
-      }
+    if (videoElement) {
+      videoElement.style.visibility = enable ? "hidden" : "visible";
+    }
+    if (canvasElement) {
+      canvasElement.style.visibility = enable ? "visible" : "hidden";
+    }
 
-      if (videoPlayer) {
-        videoPlayer.reset();
+    if (videoPlayer) {
+      videoPlayer.reset();
 
-        if (enable) {
-          videoPlayer.controlBar.playToggle.hide();
-          videoPlayer.controlBar.pictureInPictureToggle.hide();
-          videoPlayer.controlBar.fullscreenToggle.hide();
-        } else {
-          videoPlayer.controlBar.playToggle.show();
-          videoPlayer.controlBar.pictureInPictureToggle.show();
-          videoPlayer.controlBar.fullscreenToggle.show();
-        }
-
-        argument(id, "play", enable ? false : () => videoPlayer.play());
-        argument(id, "pause", enable ? false : () => videoPlayer.pause());
+      if (enable) {
+        videoPlayer.controlBar.playToggle.hide();
+        videoPlayer.controlBar.pictureInPictureToggle.hide();
+        videoPlayer.controlBar.fullscreenToggle.hide();
+      } else {
+        videoPlayer.controlBar.playToggle.show();
+        videoPlayer.controlBar.pictureInPictureToggle.show();
+        videoPlayer.controlBar.fullscreenToggle.show();
       }
 
-      linkElement(
-        id,
-        "peekElement",
-        enable
-          ? canvasElement
-          : isYT
-            ? (containerRef.current as HTMLDivElement)
-            : videoElement
-      );
-    },
-    [argument, containerRef, id, isYT, linkElement]
-  );
-  const loadPlayer = useCallback(() => {
+      argument(id, "play", enable ? false : () => videoPlayer.play());
+      argument(id, "pause", enable ? false : () => videoPlayer.pause());
+    }
+
+    linkElement(
+      id,
+      "peekElement",
+      enable
+        ? canvasElement
+        : isYT
+          ? (containerRef.current as HTMLDivElement)
+          : videoElement
+    );
+  };
+  const loadPlayer = (): void => {
     if (playerInitialized.current) return;
 
     playerInitialized.current = true;
@@ -172,6 +174,30 @@ const useVideoPlayer = ({
           }
         }
       });
+      const requestFullscreen = videoPlayer.requestFullscreen.bind(videoPlayer);
+      const exitFullscreen = videoPlayer.exitFullscreen.bind(videoPlayer);
+
+      // Not every browser can go from one fullscreen element to another, so
+      // the viewport handles switching to and back from desktop fullscreen
+      videoPlayer.requestFullscreen = () => {
+        if (getFullscreenElement()) {
+          switchFullscreen(videoPlayer.el() as HTMLElement);
+        } else {
+          requestFullscreen();
+        }
+
+        return videoPlayer;
+      };
+      videoPlayer.exitFullscreen = () => {
+        if (getFullscreenElement() === videoPlayer.el()) {
+          switchFullscreen(videoPlayer.el() as HTMLElement);
+        } else {
+          exitFullscreen();
+        }
+
+        return videoPlayer;
+      };
+
       const toggleFullscreen = (): void => {
         try {
           if (videoPlayer.isFullscreen()) videoPlayer.exitFullscreen();
@@ -296,7 +322,7 @@ const useVideoPlayer = ({
       );
       containerRef.current
         ?.closest("section")
-        ?.addEventListener("keydown", ({ key, altKey, ctrlKey }) => {
+        ?.addEventListener("keydown", ({ altKey, ctrlKey, key, target }) => {
           if (altKey) {
             if (VideoResizeKey[key]) {
               updateWindowSize(
@@ -306,7 +332,9 @@ const useVideoPlayer = ({
             } else if (key === "Enter") {
               toggleFullscreen();
             }
-          } else if (!ctrlKey) {
+          } else if (!ctrlKey && !(target instanceof HTMLButtonElement)) {
+            // Keys on the title bar's buttons, which share the window, don't
+            // also play or seek
             // eslint-disable-next-line default-case
             switch (key) {
               case " ":
@@ -334,67 +362,45 @@ const useVideoPlayer = ({
       videoPlayer.on("pause", () => argument(id, "paused", true));
       videoPlayer.on("play", () => argument(id, "paused", false));
     });
-  }, [
-    addFile,
-    argument,
-    canvasMode,
-    containerRef,
-    createPath,
-    getSource,
-    id,
-    isYT,
-    linkElement,
-    setLoading,
-    setUrl,
-    updateFolder,
-    updateWindowSize,
-    url,
-  ]);
-  const maybeHideControlbar = useCallback(
-    (type?: string): void => {
-      const controlBar =
-        containerRef.current?.querySelector(".vjs-control-bar");
+  };
+  const maybeHideControlbar = (type?: string): void => {
+    const controlBar = containerRef.current?.querySelector(".vjs-control-bar");
 
-      if (controlBar instanceof HTMLElement) {
-        if (type === YT_TYPE) {
-          controlBar.classList.add("no-interaction");
-        } else {
-          controlBar.classList.remove("no-interaction");
-        }
-      }
-    },
-    [containerRef]
-  );
-  const loadVideo = useCallback(async () => {
+    if (controlBar instanceof HTMLElement) {
+      controlBar.classList.toggle("no-interaction", type === YT_TYPE);
+    }
+  };
+  const loadVideo = async (): Promise<void> => {
     canvasMode(false, player as VideoPlayer & ControlBar);
 
     if (player && url) {
-      try {
-        const { buffer, ...source } = await getSource();
+      await getSource()
+        .then(({ buffer, ...source }) => {
+          initializedUrlRef.current = false;
+          player.poster("");
+          player.src(source);
+          maybeHideControlbar(source.type);
 
-        initializedUrlRef.current = false;
-        player.poster("");
-        player.src(source);
-        maybeHideControlbar(source.type);
-        prependFileToTitle(
-          isYT ? ytPlayer?.videoTitle || "YouTube" : basename(url)
-        );
+          // Read off the player so a title change doesn't reload the video
+          const { videoTitle } = ytPlayer || {};
 
-        const [videoElement] =
-          (containerRef.current?.childNodes as NodeListOf<HTMLVideoElement>) ??
-          [];
+          prependFileToTitle(isYT ? videoTitle || "YouTube" : basename(url));
 
-        linkElement(
-          id,
-          "peekElement",
-          isYT ? (componentWindow as HTMLElement) : videoElement
-        );
-        argument(id, "peekImage", "");
-
-        if (buffer) {
           const extension = getExtension(source.url);
+          const isAudio =
+            extension === ".mp3" || AUDIO_FILE_EXTENSIONS.has(extension);
+          const videoElement = containerRef.current?.querySelector(
+            "video"
+          ) as HTMLVideoElement;
 
-          if (extension === ".mp3" || AUDIO_FILE_EXTENSIONS.has(extension)) {
+          linkElement(
+            id,
+            "peekElement",
+            isYT || isAudio ? (componentWindow as HTMLElement) : videoElement
+          );
+          argument(id, "peekImage", "");
+
+          if (buffer && isAudio) {
             getCoverArt(source.url, buffer).then((coverPicture) => {
               if (coverPicture) {
                 const coverUrl = bufferToUrl(coverPicture);
@@ -404,26 +410,12 @@ const useVideoPlayer = ({
               }
             });
           }
-        }
-      } catch {
-        // Ignore player errors
-      }
+        })
+        .catch(() => {
+          // Ignore player errors
+        });
     }
-  }, [
-    argument,
-    canvasMode,
-    componentWindow,
-    containerRef,
-    getSource,
-    id,
-    isYT,
-    linkElement,
-    maybeHideControlbar,
-    player,
-    prependFileToTitle,
-    url,
-    ytPlayer,
-  ]);
+  };
 
   useEffect(() => {
     if (loading && !player) {
@@ -450,6 +442,28 @@ const useVideoPlayer = ({
   useEffect(() => {
     if (!loading && !closing && player && url) loadVideo();
   }, [closing, loadVideo, loading, player, url]);
+
+  useEffect(() => {
+    // Cross-origin YouTube iframe swallows drops meant for the player
+    const allowDrop = (): void => {
+      const iframe = containerRef.current?.querySelector("iframe");
+
+      if (!iframe || iframe.style.pointerEvents === "none") return;
+
+      iframe.style.pointerEvents = "none";
+      // Mouse events don't fire mid-drag, so the next move means it ended
+      window.addEventListener(
+        "mousemove",
+        () => iframe.style.removeProperty("pointer-events"),
+        { once: true }
+      );
+    };
+
+    window.addEventListener("dragenter", allowDrop, { capture: true });
+
+    return () =>
+      window.removeEventListener("dragenter", allowDrop, { capture: true });
+  }, [containerRef]);
 };
 
 export default useVideoPlayer;

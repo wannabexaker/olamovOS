@@ -1,5 +1,10 @@
-import { type Track, type URLTrack } from "webamp";
 import { type Position } from "react-rnd";
+import {
+  type Action,
+  type Middleware,
+  type Track,
+  type URLTrack,
+} from "webamp";
 import {
   type ButterChurnPresets,
   type ButterChurnWebampPreset,
@@ -8,8 +13,18 @@ import {
   type WebampCI,
 } from "components/apps/Webamp/types";
 import { centerPosition } from "components/system/Window/functions";
-import { HOME, MP3_MIME_TYPE, PACKAGE_DATA } from "utils/constants";
-import { bufferToBlob, cleanUpBufferUrl, loadFiles } from "utils/functions";
+import {
+  HOME,
+  MP3_MIME_TYPE,
+  PACKAGE_DATA,
+  TASKBAR_HEIGHT,
+} from "utils/constants";
+import {
+  bufferToBlob,
+  cleanUpBufferUrl,
+  loadFiles,
+  viewHeight,
+} from "utils/functions";
 
 const BROKEN_PRESETS = new Set([
   "Flexi - alien fish pond",
@@ -34,7 +49,20 @@ const createWebampSkinMuseumQuery = (offset: number): string => `
   }
 `;
 
+// Webamp snaps windows within the browser size it measures, so exclude the taskbar
+const excludeTaskbarFromBounds: Middleware =
+  () => (next: (action: Action) => unknown) => (action: Action) =>
+    next(
+      action.type === "BROWSER_WINDOW_SIZE_CHANGED"
+        ? {
+            ...action,
+            height: Math.min(action.height, viewHeight() - TASKBAR_HEIGHT),
+          }
+        : action
+    );
+
 export const BASE_WEBAMP_OPTIONS = {
+  __customMiddlewares: [excludeTaskbarFromBounds],
   availableSkins: [
     {
       name: "Aqua X",
@@ -147,6 +175,9 @@ const loadButterchurnPresets = (
 const getButterchurnPresetIndex = (webamp: WebampCI): number => {
   const { presetHistory = [], presets = [] } =
     webamp.store.getState()?.milkdrop || {};
+
+  if (presets.length === 0) return -1;
+
   const index = Math.floor(Math.random() * presets.length);
   const preset = presets[index];
 
@@ -159,6 +190,8 @@ const getButterchurnPresetIndex = (webamp: WebampCI): number => {
 
 export const loadButterchurnPreset = (webamp: WebampCI): void => {
   const index = getButterchurnPresetIndex(webamp);
+
+  if (index === -1) return;
 
   webamp.store.dispatch({
     addToHistory: true,
@@ -173,13 +206,11 @@ export const loadButterchurnPreset = (webamp: WebampCI): void => {
 
 let cycleTimerId = 0;
 
-const cycleButterchurnPresets = (webamp: WebampCI): void => {
-  window.clearInterval(cycleTimerId);
-  cycleTimerId = window.setInterval(() => {
-    if (!webamp) window.clearInterval(cycleTimerId);
+export const stopPresetCycle = (): void => window.clearInterval(cycleTimerId);
 
-    loadButterchurnPreset(webamp);
-  }, 20000);
+const cycleButterchurnPresets = (webamp: WebampCI): void => {
+  stopPresetCycle();
+  cycleTimerId = window.setInterval(() => loadButterchurnPreset(webamp), 20000);
 };
 
 export const loadMilkdropWhenNeeded = (webamp: WebampCI): void => {
@@ -192,7 +223,7 @@ export const loadMilkdropWhenNeeded = (webamp: WebampCI): void => {
 
         loadButterchurn(webamp, window.butterchurn.default);
 
-        const { playlist, main: mainWindow } = windows.genWindows || {};
+        const { main: mainWindow, playlist } = windows.genWindows || {};
         const { x = 0, y = 0 } =
           (playlist?.open ? playlist?.position : mainWindow?.position) || {};
 
@@ -209,22 +240,17 @@ export const loadMilkdropWhenNeeded = (webamp: WebampCI): void => {
         unsubscribe();
 
         webamp.store.subscribe(() => {
-          const webampDesktop = [...document.body.children].find((node) =>
-            node.classList?.contains("webamp-desktop")
+          const webampDesktop = document.body.querySelector(
+            ":scope > .webamp-desktop"
           );
+          const main = document.querySelector("main");
 
-          if (webampDesktop) {
-            const main = document.querySelector("main");
+          if (!webampDesktop || !main) return;
 
-            if (main) {
-              [...main.children].forEach((node) => {
-                if (node.classList?.contains("webamp-desktop")) {
-                  node.remove();
-                }
-              });
-              main.append(webampDesktop);
-            }
-          }
+          main
+            .querySelectorAll(":scope > .webamp-desktop")
+            .forEach((node) => node.remove());
+          main.append(webampDesktop);
         });
 
         import("butterchurn-presets").then(({ default: presets }) => {

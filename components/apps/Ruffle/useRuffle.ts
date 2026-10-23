@@ -1,10 +1,10 @@
 import { basename, extname } from "path";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { type RufflePlayer } from "components/apps/Ruffle/types";
 import { type ContainerHookProps } from "components/system/Apps/AppContainer";
 import useTitle from "components/system/Window/useTitle";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
+import { useFileSystemActions } from "contexts/fileSystem";
+import { useProcess, useProcessesActions } from "contexts/process";
 import { loadFiles } from "utils/functions";
 
 const useRuffle = ({
@@ -13,27 +13,26 @@ const useRuffle = ({
   setLoading,
   url,
 }: ContainerHookProps): void => {
-  const {
-    argument,
-    linkElement,
-    processes: { [id]: { libs = [] } = {} } = {},
-  } = useProcesses();
+  const { argument, linkElement } = useProcessesActions();
+  const { libs = [] } = useProcess(id);
   const [player, setPlayer] = useState<RufflePlayer>();
   const { appendFileToTitle } = useTitle(id);
-  const { readFile } = useFileSystem();
-  const loadFlash = useCallback(async () => {
+  const { readFile } = useFileSystemActions();
+  const loadFlash = async (): Promise<void> => {
     containerRef.current?.classList.remove("drop");
 
-    try {
-      await player?.load({ data: await readFile(url) });
-    } catch {
-      // Ruffle handles error reporting
-    } finally {
-      setLoading(false);
+    if (player) {
+      try {
+        await player.load({ data: await readFile(url) });
+      } catch {
+        // Ruffle handles error reporting
+      }
     }
 
+    setLoading(false);
+
     appendFileToTitle(basename(url, extname(url)));
-  }, [appendFileToTitle, containerRef, player, readFile, setLoading, url]);
+  };
 
   useEffect(() => {
     loadFiles(libs).then(() => {

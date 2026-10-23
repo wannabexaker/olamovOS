@@ -1,3 +1,4 @@
+import { basename } from "path";
 import {
   HIGH_PRIORITY_REQUEST,
   MILLISECONDS_IN_SECOND,
@@ -6,7 +7,7 @@ import {
 
 let IPFS_GATEWAY_URL = "";
 
-export const IPFS_GATEWAY_URLS = [
+const IPFS_GATEWAY_URLS = [
   "https://<CID>.ipfs.dweb.link/",
   "https://gateway.ipfs.io/ipfs/<CID>/",
 ];
@@ -84,10 +85,18 @@ export const getIpfsFileName = async (
   const { hostname, pathname, searchParams } = new URL(ipfsUrl);
   const fileName = searchParams.get("filename");
 
-  if (fileName) return fileName;
+  if (fileName) return basename(fileName);
 
-  const { fileTypeFromBuffer } = await import("file-type");
-  const { ext = "" } = (await fileTypeFromBuffer(ipfsData)) || {};
+  let ext = "";
+
+  try {
+    const { fileTypeFromBuffer } = await import("file-type");
+
+    ext = (await fileTypeFromBuffer(ipfsData))?.ext || "";
+  } catch {
+    // file-type fails to parse in older browsers (regex v flag)
+  }
+
   const fullPath = `${hostname}${pathname}`;
 
   return `${fullPath.split("/").filter(Boolean).join("_")}${ext ? `.${ext}` : ""}`;

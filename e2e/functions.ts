@@ -1,21 +1,26 @@
-import { readFileSync, readdirSync, statSync } from "fs";
+import { readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
+import AxeBuilder from "@axe-core/playwright";
 import {
   type ConsoleMessage,
+  type Disposable,
+  expect,
   type Locator,
   type Page,
   type Response,
-  expect,
+  test,
 } from "@playwright/test";
 import {
-  type IsShown,
-  type MenuItems,
+  ACCESSIBILITY_EXCEPTION_IDS,
   BACKGROUND_CANVAS_SELECTOR,
   CALENDAR_LABEL,
   CLOCK_LABEL,
   CLOCK_REGEX,
   CONTEXT_MENU_ENTRIES_SELECTOR,
   CONTEXT_MENU_SELECTOR,
+  CURSOR_SPACE_LENGTH,
+  DEFAULT_SESSION,
+  DESKTOP_ENTRIES_RENAMING_SELECTOR,
   DESKTOP_ENTRIES_SELECTOR,
   DESKTOP_SELECTOR,
   EXACT,
@@ -25,38 +30,42 @@ import {
   FILE_EXPLORER_ENTRIES_RENAMING_SELECTOR,
   FILE_EXPLORER_ENTRIES_SELECTOR,
   FILE_EXPLORER_NAV_SELECTOR,
+  FILE_EXPLORER_SEARCH_BOX_SELECTOR,
   FILE_EXPLORER_SELECTOR,
+  FLY_SELECTOR,
+  type IsShown,
+  type MenuItems,
   RIGHT_CLICK,
+  ROOT_PUBLIC_FOLDER,
   SEARCH_BUTTON_SELECTOR,
+  SEARCH_MENU_INPUT_SELECTOR,
+  SEARCH_MENU_RESULTS_SELECTOR,
   SEARCH_MENU_SELECTOR,
   SELECTION_SELECTOR,
   SHEEP_SELECTOR,
+  SHORTCUT_ICON_SELECTOR,
   START_BUTTON_SELECTOR,
   START_MENU_SELECTOR,
   START_MENU_SIDEBAR_SELECTOR,
+  TAB_SPACE_LENGTH,
+  TALOS_LABEL,
   TASKBAR_ENTRIES_SELECTOR,
+  TASKBAR_ENTRY_LABEL_SUFFIX,
   TASKBAR_ENTRY_PEEK_IMAGE_SELECTOR,
   TASKBAR_ENTRY_PEEK_SELECTOR,
   TASKBAR_ENTRY_SELECTOR,
   TASKBAR_SELECTOR,
+  TERMINAL_ROWS_SELECTOR,
+  TERMINAL_SELECTOR,
   TEST_APP,
   TEST_APP_CONTAINER_APP,
   TYPE_DELAY,
   UNKNOWN_ICON_PATH,
   WEBGL_OFFSCREEN_NOT_SUPPORTED_BROWSERS,
+  WEBGPU_HEADLESS_NOT_SUPPORTED_BROWSERS,
   WINDOW_SELECTOR,
   WINDOW_TITLEBAR_ICON_SELECTOR,
   WINDOW_TITLEBAR_SELECTOR,
-  SEARCH_MENU_INPUT_SELECTOR,
-  SEARCH_MENU_RESULTS_SELECTOR,
-  FILE_EXPLORER_SEARCH_BOX_SELECTOR,
-  TERMINAL_ROWS_SELECTOR,
-  TERMINAL_SELECTOR,
-  ROOT_PUBLIC_FOLDER,
-  CURSOR_SPACE_LENGTH,
-  TAB_SPACE_LENGTH,
-  SHORTCUT_ICON_SELECTOR,
-  DEFAULT_SESSION,
 } from "e2e/constants";
 
 type TestProps = {
@@ -84,6 +93,36 @@ type DocumentWithVendorFullscreen = Document & {
   mozFullScreenElement?: HTMLElement;
   webkitFullscreenElement?: HTMLElement;
 };
+
+export const scanPasses = async (
+  page: Page,
+  include?: string
+): Promise<void> => {
+  const builder = new AxeBuilder({ page }).disableRules(
+    ACCESSIBILITY_EXCEPTION_IDS
+  );
+  const { violations } = await (
+    include ? builder.include(include) : builder
+  ).analyze();
+
+  await test.info().attach("accessibility-scan-results", {
+    body: JSON.stringify(violations, undefined, 2),
+    contentType: "application/json",
+  });
+
+  expect(violations).toEqual([]);
+};
+
+const taskbarEntryLabel = (label: RegExp | string): RegExp | string =>
+  typeof label === "string"
+    ? `${label}${TASKBAR_ENTRY_LABEL_SUFFIX}`
+    : // An escaped literal \$ is not the end-of-input anchor
+      label.source.endsWith("$") && !label.source.endsWith(String.raw`\$`)
+      ? new RegExp(
+          `${label.source.slice(0, -1)}${TASKBAR_ENTRY_LABEL_SUFFIX}$`,
+          label.flags
+        )
+      : label;
 
 type MessageType = ReturnType<ConsoleMessage["type"]>;
 
@@ -120,17 +159,24 @@ export const filterMenuItems = (
     typeof shown === "boolean" ? shown : shown(browserName),
   ]);
 
-export const disableOffscreenCanvas = ({ page }: TestProps): Promise<void> =>
+export const disableOffscreenCanvas = ({
+  page,
+}: TestProps): Promise<Disposable> =>
   page.addInitScript(() => {
     delete (window as Partial<Window & typeof globalThis>).OffscreenCanvas;
   });
 
-export const disableWallpaper = ({ page }: TestProps): Promise<void> =>
+export const disableWallpaper = ({ page }: TestProps): Promise<Disposable> =>
   page.addInitScript(() => {
     window.DEBUG_DISABLE_WALLPAPER = true;
   });
 
 // action
+// Closing only the context lets Firefox close IndexedDB under the live page, so
+// pending BrowserFS work throws "Can't start a transaction on a closed database"
+export const closePage = async ({ page }: TestProps): Promise<void> =>
+  page.close();
+
 export const mockPictureSlideshowRequest = async ({
   page,
 }: TestProps): Promise<() => Promise<void>> => {
@@ -237,7 +283,7 @@ export const dragDesktopEntryToFileExplorer = async (
 export const dragWindowToDesktop = async ({
   page,
 }: TestProps): Promise<void> => {
-  const { width = 0, height = 0 } =
+  const { height = 0, width = 0 } =
     (await page.locator(WINDOW_TITLEBAR_SELECTOR).boundingBox()) || {};
 
   expect(width).toBeGreaterThan(0);
@@ -257,7 +303,10 @@ export const hoverOnTaskbarEntry = async (
   label: RegExp | string,
   { page }: TestProps
 ): Promise<void> =>
-  page.locator(TASKBAR_ENTRY_SELECTOR).getByLabel(label).hover();
+  page
+    .locator(TASKBAR_ENTRY_SELECTOR)
+    .getByLabel(taskbarEntryLabel(label))
+    .hover();
 
 export const pressDesktopKeys = async (
   keys: string,
@@ -279,11 +328,6 @@ export const pressFileExplorerEntryKeys = async (
   { page }: TestProps
 ): Promise<void> =>
   page.locator(FILE_EXPLORER_ENTRIES_SELECTOR).getByLabel(label).press(keys);
-
-export const pressWindowKeys = async (
-  keys: string,
-  { page }: TestProps
-): Promise<void> => page.locator(WINDOW_SELECTOR).press(keys);
 
 // locator->first->action
 export const clickFirstDesktopEntry = async ({
@@ -384,8 +428,14 @@ export const clickTaskbarEntry = async (
 ): Promise<void> =>
   page
     .locator(TASKBAR_ENTRY_SELECTOR)
-    .getByLabel(label, EXACT)
+    .getByLabel(taskbarEntryLabel(label), EXACT)
     .click(right ? RIGHT_CLICK : undefined);
+
+export const doubleClickDesktopEntry = async (
+  label: RegExp,
+  { page }: TestProps
+): Promise<void> =>
+  page.locator(DESKTOP_ENTRIES_SELECTOR).getByLabel(label).dblclick();
 
 export const fileExplorerRenameEntry = async (
   newName: string,
@@ -481,6 +531,32 @@ export const mockSaveFilePicker = async (
 export const getHostname = async ({ page }: TestProps): Promise<string> =>
   page.evaluate(() => window.location.hostname);
 
+// Mirrors getAvailability in hooks/useWindowAI
+const hasBuiltInAI = async ({ page }: TestProps): Promise<boolean> =>
+  page.evaluate(async () => {
+    if (!("LanguageModel" in window)) return false;
+
+    try {
+      return (
+        (await LanguageModel.availability({
+          expectedInputs: [{ languages: ["en"], type: "text" }],
+          expectedOutputs: [{ languages: ["en"], type: "text" }],
+        })) !== "unavailable"
+      );
+    } catch {
+      return false;
+    }
+  });
+
+// Mirrors when the taskbar menu offers the Talos button
+export const offersTalos = async ({
+  browserName,
+  page,
+}: TestPropsWithBrowser): Promise<boolean> =>
+  (!WEBGPU_HEADLESS_NOT_SUPPORTED_BROWSERS.has(browserName) &&
+    !process.env.CI) ||
+  hasBuiltInAI({ page });
+
 export const windowAnimationIsFinished = async ({
   page,
 }: TestProps): Promise<Animation[]> =>
@@ -522,8 +598,8 @@ export const windowIsMaximized = async (
       await page.evaluate(
         ([windowSelector, taskbarSelector]) => {
           const {
-            clientWidth: windowWidth = 0,
             clientHeight: windowHeight = 0,
+            clientWidth: windowWidth = 0,
           } = document.querySelector(windowSelector) || {};
           const { clientHeight: taskbarHeight = 0 } =
             document.querySelector(taskbarSelector) || {};
@@ -536,6 +612,20 @@ export const windowIsMaximized = async (
         [WINDOW_SELECTOR, TASKBAR_SELECTOR]
       )
     ).toBe(maximized)
+  ).toPass();
+
+export const windowTitlebarHasBlobIcon = async ({
+  page,
+}: TestProps): Promise<void> =>
+  expect(async () =>
+    expect(
+      await page
+        .locator(`${WINDOW_TITLEBAR_ICON_SELECTOR}>img`)
+        .evaluate(
+          ({ complete, naturalWidth, src }: HTMLImageElement) =>
+            complete && naturalWidth > 0 && src.startsWith("blob:")
+        )
+    ).toBeTruthy()
   ).toPass();
 
 // expect->locator
@@ -552,6 +642,11 @@ export const contextMenuIsVisible = async ({
 }: TestProps): Promise<void> =>
   expect(page.locator(CONTEXT_MENU_SELECTOR)).toBeVisible();
 
+export const desktopEntryIsRenaming = async ({
+  page,
+}: TestProps): Promise<void> =>
+  expect(page.locator(DESKTOP_ENTRIES_RENAMING_SELECTOR)).toBeVisible();
+
 export const desktopIsVisible = async ({ page }: TestProps): Promise<void> =>
   expect(page.locator(DESKTOP_SELECTOR)).toBeVisible();
 
@@ -563,6 +658,37 @@ export const searchMenuIsVisible = async ({ page }: TestProps): Promise<void> =>
 
 export const sheepIsVisible = async ({ page }: TestProps): Promise<void> =>
   expect(page.locator(SHEEP_SELECTOR)).toBeVisible();
+
+export const flyIsVisible = async ({ page }: TestProps): Promise<void> => {
+  await expect(page.locator(FLY_SELECTOR)).toBeVisible();
+  // The overlay canvas exists; the fly counts only once it has painted.
+  await expect(async () =>
+    expect(
+      await page.locator(FLY_SELECTOR).evaluate((canvas) => {
+        const context = (canvas as HTMLCanvasElement).getContext("2d");
+
+        if (!context) return 0;
+
+        const { data } = context.getImageData(
+          0,
+          0,
+          (canvas as HTMLCanvasElement).width,
+          (canvas as HTMLCanvasElement).height
+        );
+        let painted = 0;
+
+        for (let i = 3; i < data.length; i += 4) {
+          if (data[i] > 0) painted += 1;
+        }
+
+        return painted;
+      })
+    ).toBeGreaterThan(50)
+  ).toPass();
+};
+
+export const flyIsHidden = async ({ page }: TestProps): Promise<void> =>
+  expect(page.locator(FLY_SELECTOR)).toBeHidden();
 
 export const startButtonIsVisible = async ({
   page,
@@ -686,18 +812,29 @@ export const searchResultEntryIsVisible = async (
     page.locator(SEARCH_MENU_RESULTS_SELECTOR).getByTitle(label)
   ).toBeVisible();
 
+export const talosButtonIsHidden = async ({ page }: TestProps): Promise<void> =>
+  expect(page.locator(TASKBAR_SELECTOR).getByLabel(TALOS_LABEL)).toBeHidden();
+
+export const talosButtonIsVisible = async ({
+  page,
+}: TestProps): Promise<void> =>
+  expect(page.locator(TASKBAR_SELECTOR).getByLabel(TALOS_LABEL)).toBeVisible();
+
 export const taskbarEntryIsHidden = async (
   label: RegExp | string,
   { page }: TestProps
 ): Promise<void> =>
   expect(
-    page.locator(TASKBAR_ENTRY_SELECTOR).getByLabel(label, EXACT)
+    page
+      .locator(TASKBAR_ENTRY_SELECTOR)
+      .getByLabel(taskbarEntryLabel(label), EXACT)
   ).toBeHidden();
 
 export const taskbarEntryIsVisible = async (
   label: RegExp | string,
   { page }: TestProps
-): Promise<void> => entryIsVisible(TASKBAR_ENTRY_SELECTOR, label, page);
+): Promise<void> =>
+  entryIsVisible(TASKBAR_ENTRY_SELECTOR, taskbarEntryLabel(label), page);
 
 export const taskbarEntryPeekIsHidden = async ({
   page,
@@ -707,9 +844,14 @@ export const taskbarEntryPeekIsHidden = async ({
 export const taskbarEntryPeekImageIsVisible = async ({
   page,
 }: TestProps): Promise<void> =>
-  expect(async () =>
-    expect(page.locator(TASKBAR_ENTRY_PEEK_IMAGE_SELECTOR)).toBeVisible()
-  ).toPass();
+  // Mounts transparent, so a visible image alone doesn't mean it was shown
+  expect(async () => {
+    await expect(page.locator(TASKBAR_ENTRY_PEEK_SELECTOR)).toHaveCSS(
+      "opacity",
+      "1"
+    );
+    await expect(page.locator(TASKBAR_ENTRY_PEEK_IMAGE_SELECTOR)).toBeVisible();
+  }).toPass();
 
 export const startMenuEntryIsVisible = async (
   label: RegExp | string,
@@ -744,14 +886,14 @@ export const taskbarEntryHasTooltip = async (
   { page }: TestProps
 ): Promise<void> =>
   expect(
-    page.locator(TASKBAR_ENTRY_SELECTOR).getByLabel(label)
+    page.locator(TASKBAR_ENTRY_SELECTOR).getByLabel(taskbarEntryLabel(label))
   ).toHaveAttribute("title", title);
 
 // expect->locator->getBy->getBy
 const clockTextLocator = (page: Page): Locator =>
   page.locator(TASKBAR_SELECTOR).getByLabel(CLOCK_LABEL).getByText(CLOCK_REGEX);
 
-export const clockTextIsHidden = async ({ page }: TestProps): Promise<void> =>
+const clockTextIsHidden = async ({ page }: TestProps): Promise<void> =>
   expect(clockTextLocator(page)).toBeHidden();
 
 export const clockTextIsVisible = async ({ page }: TestProps): Promise<void> =>
@@ -764,9 +906,16 @@ const clockCanvasLocator = (page: Page): Locator =>
 export const clockCanvasIsHidden = async ({ page }: TestProps): Promise<void> =>
   expect(clockCanvasLocator(page)).toBeHidden();
 
-export const clockCanvasIsVisible = async ({
-  page,
-}: TestProps): Promise<void> => expect(clockCanvasLocator(page)).toBeVisible();
+const clockCanvasIsVisible = async ({ page }: TestProps): Promise<void> =>
+  expect(clockCanvasLocator(page)).toBeVisible();
+
+export const desktopEntryHasBlobIcon = async (
+  label: RegExp,
+  { page }: TestProps
+): Promise<void> =>
+  expect(
+    page.locator(DESKTOP_ENTRIES_SELECTOR).getByLabel(label).locator("img")
+  ).toHaveAttribute("src", /^blob:/);
 
 export const taskbarEntryHasIcon = async (
   label: RegExp,
@@ -774,7 +923,10 @@ export const taskbarEntryHasIcon = async (
   { page }: TestProps
 ): Promise<void> =>
   expect(
-    page.locator(TASKBAR_ENTRY_SELECTOR).getByLabel(label).locator("img")
+    page
+      .locator(TASKBAR_ENTRY_SELECTOR)
+      .getByLabel(taskbarEntryLabel(label))
+      .locator("img")
   ).toHaveAttribute("src", src);
 
 export const fileExplorerEntryHasShortcutIcon = async (
@@ -823,7 +975,7 @@ export const taskbarEntriesAreVisible = async ({
 
 export const terminalHasText = async (
   { page }: TestProps,
-  text: string | RegExp,
+  text: RegExp | string,
   count = 1,
   cursorLine = false,
   exact = false
@@ -991,7 +1143,7 @@ export const selectArea = async ({
   page,
   selection,
 }: TestPropsWithSelection): Promise<void> => {
-  const { x = 0, y = 0, width = 0, height = 0, up = false } = selection || {};
+  const { height = 0, up = false, width = 0, x = 0, y = 0 } = selection || {};
   await page.mouse.move(x, y);
   await page.mouse.down({ button: "left" });
   await page.mouse.move(x + width, y + height);
@@ -1010,11 +1162,11 @@ export const selectArea = async ({
 
 // loaders
 export const loadApp =
-  (queryParams?: Record<string, string>) =>
-  async ({ page }: TestProps): Promise<Response | null> => {
-    await page.addInitScript((session) => {
-      window.DEBUG_DEFAULT_SESSION = session;
-    }, DEFAULT_SESSION);
+  (queryParams?: Record<string, string>, session = DEFAULT_SESSION) =>
+  async ({ page }: TestProps): Promise<null | Response> => {
+    await page.addInitScript((debugSession) => {
+      window.DEBUG_DEFAULT_SESSION = debugSession;
+    }, session);
 
     return page.goto(
       queryParams ? `/?${new URLSearchParams(queryParams).toString()}` : "/"
@@ -1023,16 +1175,16 @@ export const loadApp =
 
 export const loadTestApp = async ({
   page,
-}: TestProps): Promise<Response | null> => loadApp({ app: TEST_APP })({ page });
+}: TestProps): Promise<null | Response> => loadApp({ app: TEST_APP })({ page });
 
 export const loadContainerTestApp = async ({
   page,
-}: TestProps): Promise<Response | null> =>
+}: TestProps): Promise<null | Response> =>
   loadApp({ app: TEST_APP_CONTAINER_APP })({ page });
 
 export const loadAppWithCanvas = async ({
-  headless,
   browserName,
+  headless,
   page,
 }: TestProps): Promise<void> => {
   await loadApp()({ page });

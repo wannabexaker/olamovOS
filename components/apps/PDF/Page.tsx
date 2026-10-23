@@ -1,5 +1,6 @@
-import { useRef, useEffect, memo } from "react";
-import { useProcesses } from "contexts/process";
+// eslint-disable-next-line no-restricted-imports -- PDF re-maps every page as each one finishes loading
+import { memo, useEffect, useRef } from "react";
+import { useProcess, useProcessesActions } from "contexts/process";
 
 type PageProps = {
   canvas: HTMLCanvasElement;
@@ -9,11 +10,8 @@ type PageProps = {
 
 const Page: FC<PageProps> = ({ canvas, id, page }) => {
   const containerRef = useRef<HTMLLIElement | null>(null);
-  const {
-    argument,
-    processes: { [id]: process },
-  } = useProcesses();
-  const { componentWindow } = process || {};
+  const { argument } = useProcessesActions();
+  const { componentWindow } = useProcess(id);
 
   useEffect(() => {
     if (canvas) containerRef.current?.append(canvas);
@@ -23,7 +21,7 @@ const Page: FC<PageProps> = ({ canvas, id, page }) => {
 
   useEffect(() => {
     const container = containerRef.current;
-    // eslint-disable-next-line no-undef-init, unicorn/no-useless-undefined
+    // eslint-disable-next-line unicorn/no-useless-undefined
     let observer: IntersectionObserver | undefined = undefined;
 
     if (

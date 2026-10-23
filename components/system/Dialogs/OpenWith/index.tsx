@@ -1,16 +1,17 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
-import useCloseOnEscape from "components/system/Dialogs/useCloseOnEscape";
+import { useEffect, useRef, useState } from "react";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import StyledOpenWith from "components/system/Dialogs/OpenWith/StyledOpenWith";
 import StyledOpenWithList from "components/system/Dialogs/OpenWith/StyledOpenWithList";
+import useCloseOnEscape from "components/system/Dialogs/useCloseOnEscape";
 import { getProcessByFileExtension } from "components/system/Files/FileEntry/functions";
-import { useProcesses } from "contexts/process";
+import { useProcess, useProcessesActions } from "contexts/process";
 import directory from "contexts/process/directory";
-import { useSession } from "contexts/session";
+import { useForegroundId, useSessionActions } from "contexts/session";
 import Button from "styles/common/Button";
 import Icon from "styles/common/Icon";
 import { PREVENT_SCROLL, TRANSITIONS_IN_MILLISECONDS } from "utils/constants";
 import { getExtension, haltEvent } from "utils/functions";
+import { focusByKey } from "utils/keyboard";
 
 const INCLUDED_PROCESSES = new Set([
   "BoxedWine",
@@ -32,6 +33,7 @@ const INCLUDED_PROCESSES = new Set([
 type OpenWithEntryProps = {
   icon: string;
   onClick: () => void;
+  onRun: () => void;
   selected: boolean;
   title: string;
 };
@@ -39,13 +41,24 @@ type OpenWithEntryProps = {
 const OpenWithEntry: FC<OpenWithEntryProps> = ({
   icon,
   onClick,
+  onRun,
   selected,
   title,
 }) => (
   <li className={selected ? "selected" : ""}>
-    <Button onClick={onClick}>
+    <Button
+      aria-label={title}
+      aria-pressed={selected}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          haltEvent(event);
+          onRun();
+        }
+      }}
+    >
       <figure>
-        <Icon alt={title} displaySize={24} imgSize={32} src={icon} />
+        <Icon alt="" displaySize={24} imgSize={32} src={icon} />
         <figcaption>{title}</figcaption>
       </figure>
     </Button>
@@ -53,44 +66,39 @@ const OpenWithEntry: FC<OpenWithEntryProps> = ({
 );
 
 const OpenWith: FC<ComponentProcessProps> = ({ id }) => {
-  const {
-    closeWithTransition,
-    open,
-    processes: { [id]: process } = {},
-  } = useProcesses();
-  const { foregroundId, setForegroundId, updateRecentFiles } = useSession();
-  const { url } = process || {};
+  // Process ids can contain paths with spaces, which are invalid in id
+  // attributes and split aria-labelledby's IDREF list
+  const primaryLabelId = `openwith-primary-${id}`.replace(/\s/g, "_");
+  const otherLabelId = `openwith-other-${id}`.replace(/\s/g, "_");
+  const { closeWithTransition, open } = useProcessesActions();
+  const { setForegroundId, updateRecentFiles } = useSessionActions();
+  const foregroundId = useForegroundId();
+  const { url } = useProcess(id);
   const urlExtension = url ? getExtension(url) : "";
   const primaryExtensionProcesses = getProcessByFileExtension(urlExtension);
-  const { title: primaryTitle, icon: primaryIcon } =
+  const { icon: primaryIcon, title: primaryTitle } =
     (primaryExtensionProcesses && directory[primaryExtensionProcesses]) || {};
   const [selectedPid, setSelectedPid] = useState(primaryExtensionProcesses);
   const [closeOnBlur, setCloseOnBlur] = useState(false);
   const recentlySelectedPid = useRef("");
-  const runApp = useCallback(
-    (pid: string): void => {
-      open(pid, { url });
-      closeWithTransition(id);
-      if (url && pid) updateRecentFiles(url, pid);
-    },
-    [closeWithTransition, id, open, updateRecentFiles, url]
-  );
-  const updateSelectedPid = useCallback(
-    (pid: string) => {
-      if (recentlySelectedPid.current === pid) {
-        runApp(pid);
-      } else {
-        recentlySelectedPid.current = pid;
+  const runApp = (pid: string): void => {
+    open(pid, { url });
+    closeWithTransition(id);
+    if (url && pid) updateRecentFiles(url, pid);
+  };
+  const updateSelectedPid = (pid: string): void => {
+    if (recentlySelectedPid.current === pid) {
+      runApp(pid);
+    } else {
+      recentlySelectedPid.current = pid;
 
-        setTimeout(() => {
-          recentlySelectedPid.current = "";
-        }, TRANSITIONS_IN_MILLISECONDS.DOUBLE_CLICK);
+      setTimeout(() => {
+        recentlySelectedPid.current = "";
+      }, TRANSITIONS_IN_MILLISECONDS.DOUBLE_CLICK);
 
-        setSelectedPid(pid);
-      }
-    },
-    [runApp]
-  );
+      setSelectedPid(pid);
+    }
+  };
   const closeOnEscape = useCloseOnEscape(id);
 
   useEffect(() => {
@@ -116,29 +124,64 @@ const OpenWith: FC<ComponentProcessProps> = ({ id }) => {
   return (
     <StyledOpenWith
       ref={(element) => {
-        element?.focus(PREVENT_SCROLL);
+        // Like Windows, the chosen app has focus
+        (
+          element?.querySelector<HTMLElement>("li.selected > button") || element
+        )?.focus(PREVENT_SCROLL);
       }}
       onContextMenu={haltEvent}
+      onKeyDown={(event) => {
+        const { activeElement } = document;
+        const entries = [
+          ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+            "li > button"
+          ),
+        ];
+
+        if (
+          (event.target === event.currentTarget ||
+            entries.includes(event.target as HTMLButtonElement)) &&
+          focusByKey(event.key, entries, { horizontal: false, wrap: false })
+        ) {
+          haltEvent(event);
+
+          // Like the Windows list, selection follows the arrow keys
+          if (document.activeElement !== activeElement) {
+            (document.activeElement as HTMLButtonElement).click();
+            // Only a second click opens it, not Space after an arrow key
+            recentlySelectedPid.current = "";
+          }
+        }
+      }}
       {...closeOnEscape}
     >
       <h2>How do you want to open this file?</h2>
       <div>
         {primaryTitle && primaryIcon && (
           <>
-            <h4>Keep using this app</h4>
-            <StyledOpenWithList {...closeOnEscape}>
+            <h4 aria-level={3} id={primaryLabelId}>
+              Keep using this app
+            </h4>
+            <StyledOpenWithList aria-labelledby={primaryLabelId}>
               <OpenWithEntry
                 key={primaryTitle}
                 icon={primaryIcon}
                 onClick={() => updateSelectedPid(primaryExtensionProcesses)}
+                onRun={() => runApp(primaryExtensionProcesses)}
                 selected={selectedPid === primaryExtensionProcesses}
                 title={primaryTitle}
               />
             </StyledOpenWithList>
-            <h4>Other options</h4>
+            <h4 aria-level={3} id={otherLabelId}>
+              Other options
+            </h4>
           </>
         )}
-        <StyledOpenWithList $hideBorder={!primaryTitle || !primaryIcon}>
+        <StyledOpenWithList
+          $hideBorder={!primaryTitle || !primaryIcon}
+          {...(primaryTitle &&
+            primaryIcon && { "aria-labelledby": otherLabelId })}
+        >
           {Object.entries(directory)
             .filter(
               ([pid]) =>
@@ -149,17 +192,18 @@ const OpenWith: FC<ComponentProcessProps> = ({ id }) => {
                 key={title}
                 icon={icon}
                 onClick={() => updateSelectedPid(pid)}
+                onRun={() => runApp(pid)}
                 selected={selectedPid === pid}
                 title={title}
               />
             ))}
         </StyledOpenWithList>
       </div>
-      <nav>
+      <nav role="presentation">
         <Button onClick={() => runApp(selectedPid)}>OK</Button>
       </nav>
     </StyledOpenWith>
   );
 };
 
-export default memo(OpenWith);
+export default OpenWith;

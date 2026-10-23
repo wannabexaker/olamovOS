@@ -1,5 +1,4 @@
-import { useMemo } from "react";
-import { useMenu } from "contexts/menu";
+import { useMenuActions } from "contexts/menu";
 import { type ContextMenuCapture } from "contexts/menu/useMenuContextState";
 
 const useHistoryMenu = (
@@ -10,33 +9,25 @@ const useHistoryMenu = (
   backMenu: ContextMenuCapture;
   forwardMenu: ContextMenuCapture;
 } => {
-  const { contextMenu } = useMenu();
+  const { contextMenu } = useMenuActions();
 
   return {
-    backMenu: useMemo(
-      () =>
-        contextMenu?.(() =>
-          history
-            .filter((_url, index) => index < position)
-            .map((url, index) => ({
-              action: () => moveHistory(index - position),
-              label: url,
-            }))
-            .reverse()
-        ),
-      [contextMenu, history, moveHistory, position]
+    backMenu: contextMenu(() =>
+      history
+        .filter((_url, index) => index < position)
+        .map((url, index) => ({
+          action: () => moveHistory(index - position),
+          label: url,
+        }))
+        .reverse()
     ),
-    forwardMenu: useMemo(
-      () =>
-        contextMenu?.(() =>
-          history
-            .filter((_url, index) => index > position)
-            .map((url, index) => ({
-              action: () => moveHistory(index + 1),
-              label: url,
-            }))
-        ),
-      [contextMenu, history, moveHistory, position]
+    forwardMenu: contextMenu(() =>
+      history
+        .filter((_url, index) => index > position)
+        .map((url, index) => ({
+          action: () => moveHistory(index + 1),
+          label: url,
+        }))
     ),
   };
 };

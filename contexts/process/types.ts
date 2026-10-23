@@ -1,9 +1,9 @@
-import type * as Monaco from "monaco-editor/esm/vs/editor/editor.api";
+import type * as Monaco from "monaco-editor";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import {
-  type Operation,
   type FileReaders,
   type ObjectReaders,
+  type Operation,
 } from "components/system/Dialogs/Transfer/useTransferDialog";
 import { type Size } from "components/system/Window/RndWindow/useResizable";
 
@@ -39,7 +39,7 @@ type PdfProcessArguments = {
   subTitle?: string;
 };
 
-export type RelativePosition = {
+type RelativePosition = {
   bottom?: number;
   left?: number;
   right?: number;
@@ -59,6 +59,7 @@ type BaseProcessArguments = {
   hideTitlebar?: boolean;
   hideTitlebarIcon?: boolean;
   initialRelativePosition?: RelativePosition;
+  isLightBg?: boolean;
   libs?: string[];
   lockAspectRatio?: boolean;
   peekImage?: string;
@@ -80,8 +81,8 @@ export type ProcessElements = {
 
 export type Process = ProcessArguments &
   ProcessElements & {
-    Component: React.ComponentType<ComponentProcessProps>;
     closing?: boolean;
+    Component: React.ComponentType<ComponentProcessProps>;
     defaultSize?: Size;
     dialogProcess?: boolean;
     hasWindow?: boolean;

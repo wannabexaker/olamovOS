@@ -1,25 +1,35 @@
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTheme } from "styled-components";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { importCalendar } from "components/system/Taskbar/functions";
 import { measureText } from "components/system/Files/FileEntry/functions";
-import StyledClock from "components/system/Taskbar/Clock/StyledClock";
 import { type LocaleTimeDate } from "components/system/Taskbar/Clock/functions";
+import StyledClock from "components/system/Taskbar/Clock/StyledClock";
 import useClockContextMenu from "components/system/Taskbar/Clock/useClockContextMenu";
+import { importCalendar } from "components/system/Taskbar/functions";
 import { type Size } from "components/system/Window/RndWindow/useResizable";
-import { useSession } from "contexts/session";
+import { useClockSource } from "contexts/session";
+import { useMenuPreload } from "hooks/useMenuPreload";
 import useWorker from "hooks/useWorker";
 import {
+  CLICK_FOCUSABLE_ELEMENT,
   CLOCK_CANVAS_BASE_WIDTH,
-  FOCUSABLE_ELEMENT,
   ONE_TIME_PASSIVE_EVENT,
   TASKBAR_HEIGHT,
 } from "utils/constants";
-import { createOffscreenCanvas } from "utils/functions";
-import { useMenuPreload } from "hooks/useMenuPreload";
+import {
+  createOffscreenCanvas,
+  hasOffscreenCanvasSupport,
+} from "utils/functions";
 
-type ClockWorkerResponse = LocaleTimeDate | "source";
+type ClockWorkerResponse = "source" | LocaleTimeDate;
 
 const EASTER_EGG_CLICK_COUNT = 7;
+
+const SECONDS = /:\d{2}(?=\D*$)/;
+
+// Screen readers say a focused name again whenever it changes, so it only
+// changes each minute
+const clockLabel = (time: string): string =>
+  `System Clock, ${time.replace(SECONDS, "")}`;
 
 const LARGEST_CLOCK_TEXT = "44:44:44 AM";
 
@@ -56,13 +66,22 @@ const easterEggOnClick: React.MouseEventHandler<HTMLElement> = async ({
 };
 
 type ClockProps = {
+  calendarVisible: boolean;
   hasAI: boolean;
   setClockWidth: React.Dispatch<React.SetStateAction<number>>;
   toggleCalendar: () => void;
   width: number;
 };
 
+// The worker is rebuilt on clock source changes via useWorker's onMessage dep
+const clockWorkerInit = (): Worker =>
+  new Worker(
+    new URL("components/system/Taskbar/Clock/clock.worker", import.meta.url),
+    { name: "Clock" }
+  );
+
 const Clock: FC<ClockProps> = ({
+  calendarVisible,
   hasAI,
   setClockWidth,
   toggleCalendar,
@@ -72,39 +91,27 @@ const Clock: FC<ClockProps> = ({
     Object.create(null) as LocaleTimeDate
   );
   const { date, time } = now;
-  const { clockSource } = useSession();
-  const clockWorkerInit = useCallback(
-    () =>
-      new Worker(
-        new URL(
-          "components/system/Taskbar/Clock/clock.worker",
-          import.meta.url
-        ),
-        { name: "Clock" }
-      ),
-    // NOTE: Need `clockSource` in the dependency array to ensure the worker is rebuilt
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [clockSource]
-  );
+  const clockSource = useClockSource();
   const offScreenClockCanvas = useRef<OffscreenCanvas>(undefined);
-  const supportsOffscreenCanvas = useMemo(
-    () => typeof window !== "undefined" && "OffscreenCanvas" in window,
-    []
-  );
-  const updateTime = useCallback(
-    ({ data, target: clockWorker }: MessageEvent<ClockWorkerResponse>) => {
-      if (data === "source") {
-        (clockWorker as Worker).postMessage(clockSource);
-      } else {
-        setNow((currentNow) =>
-          !offScreenClockCanvas.current || currentNow.date !== data.date
-            ? data
-            : currentNow
-        );
-      }
-    },
-    [clockSource]
-  );
+  const clockButtonRef = useRef<HTMLButtonElement | null>(null);
+  const supportsOffscreenCanvas = hasOffscreenCanvasSupport();
+  const updateTime = ({
+    data,
+    target: clockWorker,
+  }: MessageEvent<ClockWorkerResponse>): void => {
+    if (data === "source") {
+      (clockWorker as Worker).postMessage(clockSource);
+    } else {
+      // The offscreen canvas path skips re-rendering on time changes, so
+      // the accessible name must be kept current imperatively
+      clockButtonRef.current?.setAttribute("aria-label", clockLabel(data.time));
+      setNow((currentNow) =>
+        !offScreenClockCanvas.current || currentNow.date !== data.date
+          ? data
+          : currentNow
+      );
+    }
+  };
   const clockContextMenu = useClockContextMenu(toggleCalendar);
   const currentWorker = useWorker<ClockWorkerResponse>(
     clockWorkerInit,
@@ -120,60 +127,54 @@ const Clock: FC<ClockProps> = ({
       clock: { fontSize },
     },
   } = useTheme();
-  const getMeasuredWidth = useCallback(
-    () =>
-      Math.min(
-        Math.max(
-          CLOCK_CANVAS_BASE_WIDTH,
-          Math.ceil(measureText(LARGEST_CLOCK_TEXT, fontSize, systemFont))
-        ),
-        CLOCK_CANVAS_BASE_WIDTH * 1.5
+  const getMeasuredWidth = (): number =>
+    Math.min(
+      Math.max(
+        CLOCK_CANVAS_BASE_WIDTH,
+        Math.ceil(measureText(LARGEST_CLOCK_TEXT, fontSize, systemFont))
       ),
-    [fontSize, systemFont]
-  );
-  const clockCallbackRef = useCallback(
-    (clockContainer: HTMLDivElement | null) => {
-      if (
-        !offScreenClockCanvas.current &&
-        currentWorker.current &&
-        clockContainer instanceof HTMLDivElement
-      ) {
-        [...clockContainer.children].forEach((element) => element.remove());
-
-        clockSize.current.width = getMeasuredWidth();
-        setClockWidth(clockSize.current.width);
-
-        offScreenClockCanvas.current = createOffscreenCanvas(
-          clockContainer,
-          window.devicePixelRatio,
-          clockSize.current
-        );
-
-        currentWorker.current.postMessage(
-          {
-            canvas: offScreenClockCanvas.current,
-            devicePixelRatio: window.devicePixelRatio,
-          },
-          [offScreenClockCanvas.current]
-        );
-      }
-    },
-    // NOTE: Need `now` in the dependency array to ensure the clock is updated
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [currentWorker, now]
-  );
-  const onClockClick = useCallback(
-    (event: React.MouseEvent<HTMLElement>) => {
-      easterEggOnClick(event);
-      toggleCalendar();
-    },
-    [toggleCalendar]
-  );
+      CLOCK_CANVAS_BASE_WIDTH * 1.5
+    );
+  const onClockClick = (event: React.MouseEvent<HTMLElement>): void => {
+    easterEggOnClick(event);
+    toggleCalendar();
+  };
   const menuPreloadHandler = useMenuPreload(importCalendar);
+
+  // Runs on each tick so the canvas is recreated after a clock source change
+  useLayoutEffect(() => {
+    const clockContainer = clockButtonRef.current;
+
+    if (
+      !offScreenClockCanvas.current &&
+      currentWorker.current &&
+      clockContainer instanceof HTMLButtonElement
+    ) {
+      [...clockContainer.children].forEach((element) => element.remove());
+
+      clockSize.current.width = getMeasuredWidth();
+      setClockWidth(clockSize.current.width);
+
+      offScreenClockCanvas.current = createOffscreenCanvas(
+        clockContainer,
+        window.devicePixelRatio,
+        clockSize.current
+      );
+
+      currentWorker.current.postMessage(
+        {
+          canvas: offScreenClockCanvas.current,
+          devicePixelRatio: window.devicePixelRatio,
+        },
+        [offScreenClockCanvas.current]
+      );
+    }
+    // eslint-disable-next-line react/exhaustive-effect-dependencies
+  }, [currentWorker, getMeasuredWidth, now, setClockWidth]);
 
   useEffect(() => {
     offScreenClockCanvas.current = undefined;
-    // eslint-disable-next-line react-hooks-addons/no-unused-deps
+    // eslint-disable-next-line react/exhaustive-effect-dependencies
   }, [clockSource]);
 
   useEffect(() => {
@@ -202,16 +203,19 @@ const Clock: FC<ClockProps> = ({
 
   return (
     <StyledClock
-      ref={supportsOffscreenCanvas ? clockCallbackRef : undefined}
+      ref={supportsOffscreenCanvas ? clockButtonRef : undefined}
       $hasAI={hasAI}
       $width={width}
-      aria-label="Clock"
+      aria-expanded={calendarVisible}
+      aria-haspopup="dialog"
+      aria-label={clockLabel(time)}
+      id="clock"
+      {...(calendarVisible && { "aria-controls": "calendar" })}
       onClick={onClockClick}
-      role="timer"
+      {...CLICK_FOCUSABLE_ELEMENT}
       title={date}
       suppressHydrationWarning
       {...clockContextMenu}
-      {...FOCUSABLE_ELEMENT}
       {...menuPreloadHandler}
     >
       {supportsOffscreenCanvas ? undefined : time}
@@ -219,4 +223,4 @@ const Clock: FC<ClockProps> = ({
   );
 };
 
-export default memo(Clock);
+export default Clock;

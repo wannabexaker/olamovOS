@@ -6,6 +6,12 @@ docs/olamov-app-service-inventory.md
 docs/local/
 out
 .wrangler/state/
+next-env.d.ts
+*.tsbuildinfo
+.env*
+coverage
+yarn-debug.log*
+yarn-error.log*
 
 node_modules
 

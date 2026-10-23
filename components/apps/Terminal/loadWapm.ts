@@ -1,9 +1,9 @@
 import { basename, extname } from "path";
 import { type WASIBindings } from "wasi-js";
 import {
+  config,
   WAPM_STD_IN_APPS,
   WAPM_STD_IN_EXCLUDE_ARGS,
-  config,
 } from "components/apps/Terminal/config";
 import {
   clearAnsiBackground,
@@ -15,7 +15,7 @@ type WASIError = Error & {
   code: number;
 };
 
-let bindings: WASIBindings | null;
+let bindings: null | WASIBindings;
 
 const WASM_MAGIC_NUMBER = [0x00, 0x61, 0x73, 0x6d];
 const ATOM_MAGIC_NUMBER = [
@@ -156,7 +156,7 @@ const loadWapm = async (
   printLn: (message: string) => void,
   wasmFile?: Buffer,
   pipedCommand?: string
-): Promise<[string, Uint8Array | Buffer] | []> => {
+): Promise<[] | [string, Buffer | Uint8Array]> => {
   const args = commandArgs[0] === "run" ? commandArgs.slice(1) : commandArgs;
   const [{ lowerI64Imports }, { default: WASI }] = await Promise.all([
     import("@wasmer/wasm-transformer"),
@@ -192,7 +192,6 @@ const loadWapm = async (
         (typeof args[2] === "string" ||
           !WAPM_STD_IN_EXCLUDE_ARGS.includes(args[1]));
       let readStdIn = false;
-      let exitStdIn = false;
       const wasiArgs = stdIn
         ? pipedCommand
           ? parseCommand(pipedCommand).slice(1)
@@ -207,39 +206,27 @@ const loadWapm = async (
         },
         ...(stdIn
           ? {
-              getStdin() {
-                if (exitStdIn) {
-                  // eslint-disable-next-line unicorn/no-null
-                  this.getStdin = null as unknown as undefined;
-                }
+              getStdin: () => {
+                // An empty read is the EOF
+                const input = readStdIn
+                  ? ""
+                  : args.slice(wasiArgs.length).join(" ");
 
-                const argBuffer = Buffer.from(
-                  args.slice(wasiArgs.length).join(" "),
-                  "utf8"
-                );
+                readStdIn = true;
 
-                return Object.assign(argBuffer, {
-                  copy: () => {
-                    if (readStdIn) return 0;
-
-                    readStdIn = true;
-
-                    return argBuffer.length;
-                  },
-                }) as Buffer;
+                return Buffer.from(input, "utf8");
               },
             }
           : {}),
         sendStderr: (buffer: Uint8Array) => print(buffer.toString()),
         sendStdout: (buffer: Uint8Array) => {
-          if (stdIn) exitStdIn = true;
           const output = buffer.toString();
           print(stdIn ? clearAnsiBackground(output) : output);
         },
       });
       const instance = await WebAssembly.instantiate(
         wasmModule,
-        wasi.getImports(wasmModule) as WebAssembly.Imports
+        wasi.getImports(wasmModule)
       );
 
       try {

@@ -1,6 +1,5 @@
 import { AnimatePresence } from "motion/react";
 import dynamic from "next/dynamic";
-import { memo } from "react";
 import { useProcesses } from "contexts/process";
 
 const RenderComponent = dynamic(
@@ -8,7 +7,7 @@ const RenderComponent = dynamic(
 );
 
 const AppsLoader: FC = () => {
-  const { processes = {} } = useProcesses();
+  const processes = useProcesses();
 
   return (
     <AnimatePresence initial={false} presenceAffectsLayout={false}>
@@ -29,4 +28,4 @@ const AppsLoader: FC = () => {
   );
 };
 
-export default memo(AppsLoader);
+export default AppsLoader;

@@ -1,13 +1,13 @@
 import { basename } from "path";
-import { memo, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Search } from "components/apps/FileExplorer/NavigationIcons";
 import StyledSearch from "components/apps/FileExplorer/StyledSearch";
 import { getResultInfo } from "components/system/Taskbar/Search/functions";
-import { useFileSystem } from "contexts/fileSystem";
-import { useMenu } from "contexts/menu";
+import { useFs } from "contexts/fileSystem";
+import { useMenuActions } from "contexts/menu";
 import { type MenuItem } from "contexts/menu/useMenuContextState";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
+import { useProcess, useProcessesActions } from "contexts/process";
+import { useSessionActions } from "contexts/session";
 import { SHORTCUT_EXTENSION } from "utils/constants";
 import { preloadLibs } from "utils/functions";
 import {
@@ -29,16 +29,12 @@ const SearchBar: FCWithRef<HTMLInputElement, SearchBarProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const hasUsedSearch = useRef(false);
-  const {
-    open,
-    processes: {
-      [id]: { url = "" },
-    },
-  } = useProcesses();
+  const { open } = useProcessesActions();
+  const { url = "" } = useProcess(id);
   const results = useSearch(searchTerm);
-  const { contextMenu } = useMenu();
-  const { fs } = useFileSystem();
-  const { updateRecentFiles } = useSession();
+  const { contextMenu } = useMenuActions();
+  const fs = useFs();
+  const { updateRecentFiles } = useSessionActions();
 
   useEffect(() => {
     if (searchBarRef?.current && hasUsedSearch.current) {
@@ -57,8 +53,8 @@ const SearchBar: FCWithRef<HTMLInputElement, SearchBarProps> = ({
 
               const {
                 icon,
-                url: infoUrl,
                 pid = "",
+                url: infoUrl,
               } = (await getResultInfo(fs, path)) || {};
 
               return {
@@ -82,12 +78,15 @@ const SearchBar: FCWithRef<HTMLInputElement, SearchBarProps> = ({
 
       getItems()
         .then((items) => {
+          // Results arriving after leaving the box leave other menus be
+          if (document.activeElement !== searchBarRef.current) return;
+
           if (items.length === 0) {
-            contextMenu?.(() => []).onContextMenuCapture();
+            contextMenu(() => []).onContextMenuCapture();
           } else if (searchBarRef.current?.value) {
             const searchBarRect = searchBarRef.current.getBoundingClientRect();
 
-            contextMenu?.(() => items).onContextMenuCapture(
+            contextMenu(() => items, "Search suggestions").onContextMenuCapture(
               undefined,
               searchBarRect,
               {
@@ -108,13 +107,14 @@ const SearchBar: FCWithRef<HTMLInputElement, SearchBarProps> = ({
       searchBarRef.current.value = "";
       setSearchTerm("");
     }
-    // eslint-disable-next-line react-hooks-addons/no-unused-deps
+    // eslint-disable-next-line react/exhaustive-effect-dependencies
   }, [searchBarRef, url]);
 
   return (
     <StyledSearch>
       <input
         ref={searchBarRef}
+        aria-haspopup="menu"
         onChange={({ target }) => {
           hasUsedSearch.current = true;
           setSearchTerm(target.value);
@@ -122,10 +122,11 @@ const SearchBar: FCWithRef<HTMLInputElement, SearchBarProps> = ({
         onFocus={() => preloadLibs([SEARCH_LIB, FILE_INDEX])}
         placeholder="Search"
         {...SEARCH_INPUT_PROPS}
+        aria-label="Search Box"
       />
       <Search />
     </StyledSearch>
   );
 };
 
-export default memo(SearchBar);
+export default SearchBar;

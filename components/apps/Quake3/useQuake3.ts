@@ -1,13 +1,13 @@
+import { useEffect, useRef, useState } from "react";
 import { useTheme } from "styled-components";
-import { useCallback, useEffect, useRef, useState } from "react";
 import { type ContainerHookProps } from "components/system/Apps/AppContainer";
 import useEmscriptenMount from "components/system/Files/FileManager/useEmscriptenMount";
 import { type EmscriptenFS } from "contexts/fileSystem/useAsyncFs";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
+import { useProcess, useProcessesActions } from "contexts/process";
+import { useWindowState } from "contexts/session";
+import useIsolatedContentWindow from "hooks/useIsolatedContentWindow";
 import { PREVENT_SCROLL, TRANSITIONS_IN_MILLISECONDS } from "utils/constants";
 import { haltEvent, loadFiles, pxToNum } from "utils/functions";
-import useIsolatedContentWindow from "hooks/useIsolatedContentWindow";
 
 declare global {
   interface Window {
@@ -28,14 +28,21 @@ declare global {
   }
 }
 
+const focusCanvas = (focusedWindow: Window): void => {
+  if (focusedWindow?.ioq3?.canvas) {
+    focusedWindow.ioq3.canvas.focus(PREVENT_SCROLL);
+  } else {
+    requestAnimationFrame(() => focusCanvas(focusedWindow));
+  }
+};
+
 const useQuake3 = ({
   containerRef,
   id,
-  setLoading,
   loading,
+  setLoading,
 }: ContainerHookProps): void => {
-  const { closeWithTransition, processes: { [id]: process } = {} } =
-    useProcesses();
+  const { closeWithTransition } = useProcessesActions();
   const {
     componentWindow = undefined,
     defaultSize = {
@@ -44,23 +51,13 @@ const useQuake3 = ({
     },
     libs = [],
     maximized = false,
-  } = process || {};
-  const {
-    windowStates: { [id]: windowState },
-  } = useSession();
+  } = useProcess(id);
   const {
     sizes: { titleBar },
   } = useTheme();
   const wasMaximized = useRef(false);
   const mountEmFs = useEmscriptenMount();
-  const { size } = windowState || {};
-  const focusCanvas = useCallback((focusedWindow: Window) => {
-    if (focusedWindow?.ioq3?.canvas) {
-      focusedWindow.ioq3.canvas.focus(PREVENT_SCROLL);
-    } else {
-      requestAnimationFrame(() => focusCanvas(focusedWindow));
-    }
-  }, []);
+  const { size } = useWindowState(id);
   const getContentWindow = useIsolatedContentWindow(
     id,
     containerRef,
@@ -171,10 +168,14 @@ const useQuake3 = ({
 
   useEffect(
     () => () => {
-      try {
-        contentWindow?.ioq3?.exit();
-      } catch {
-        // Ignore error on exit
+      const ioq3 = contentWindow?.ioq3;
+
+      if (ioq3) {
+        try {
+          ioq3.exit();
+        } catch {
+          // Ignore error on exit
+        }
       }
 
       contentWindow?.AL?.contexts.forEach(({ ctx }) => ctx.close());

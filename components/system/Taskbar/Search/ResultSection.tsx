@@ -1,4 +1,3 @@
-import { memo, useMemo } from "react";
 import { Search as SearchIcon } from "components/apps/FileExplorer/NavigationIcons";
 import { NO_RESULTS, type TabName } from "components/system/Taskbar/Search";
 import ResultEntry from "components/system/Taskbar/Search/ResultEntry";
@@ -18,20 +17,17 @@ type ResultsSectionProps = {
 };
 
 const ResultSection: FC<ResultsSectionProps> = ({
-  activeTab,
   activeItem,
+  activeTab,
+  changeTab,
   details,
   openApp,
   results,
   searchTerm,
   setActiveItem,
-  changeTab,
   title,
 }) => {
-  const noResults = useMemo(
-    () => results.length === 1 && results[0].ref === NO_RESULTS,
-    [results]
-  );
+  const noResults = results.length === 1 && results[0].ref === NO_RESULTS;
 
   return results.length === 0 ? (
     // eslint-disable-next-line react/jsx-no-useless-fragment
@@ -72,4 +68,4 @@ const ResultSection: FC<ResultsSectionProps> = ({
   );
 };
 
-export default memo(ResultSection);
+export default ResultSection;

@@ -1,12 +1,11 @@
 import { type GetStaticPaths, type GetStaticProps } from "next";
-import { memo } from "react";
 import OlamovDesktop from "components/pages/OlamovDesktop";
 import RouteSeo from "components/pages/seo/RouteSeo";
 import {
-  type PublicRoute,
   getRouteByPath,
-  getRouteSlug,
   getRoutesByPrefix,
+  getRouteSlug,
+  type PublicRoute,
 } from "utils/publicRoutes";
 
 type AppRouteProps = {
@@ -33,4 +32,4 @@ export const getStaticProps: GetStaticProps<AppRouteProps> = ({ params }) => {
   return route ? { props: { route } } : { notFound: true };
 };
 
-export default memo(AppRoute);
+export default AppRoute;

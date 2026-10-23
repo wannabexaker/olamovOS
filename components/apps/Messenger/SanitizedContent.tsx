@@ -1,33 +1,23 @@
 import DOMPurify from "dompurify";
-import { memo, useMemo } from "react";
 import {
   convertImageLinksToHtml,
   convertNewLinesToBreaks,
 } from "components/apps/Messenger/functions";
 
-const SanitizedContent: FC<{ content: string; decrypted: boolean }> = ({
-  content,
-  decrypted,
-}) => {
-  const decryptedContent = useMemo(
-    () =>
-      decrypted
-        ? convertImageLinksToHtml(convertNewLinesToBreaks(content))
-        : "",
-    [content, decrypted]
-  );
+// Messages are plain text, so markup in them is shown rather than parsed
+const escapeHtml = (content: string): string =>
+  content.replace(/["&'<>]/g, (char) => `&#${char.codePointAt(0)};`);
 
-  return (
-    <div
-      // eslint-disable-next-line react/no-danger
-      dangerouslySetInnerHTML={{
-        __html: DOMPurify.sanitize(decryptedContent || content, {
-          ALLOWED_ATTR: ["src"],
-          ALLOWED_TAGS: ["br", "img"],
-        }),
-      }}
-    />
-  );
-};
+const SanitizedContent: FC<{ content: string }> = ({ content }) => (
+  <div
+    // eslint-disable-next-line react/no-danger
+    dangerouslySetInnerHTML={{
+      __html: DOMPurify.sanitize(
+        convertImageLinksToHtml(convertNewLinesToBreaks(escapeHtml(content))),
+        { ALLOWED_ATTR: ["alt", "src"], ALLOWED_TAGS: ["br", "img"] }
+      ),
+    }}
+  />
+);
 
-export default memo(SanitizedContent);
+export default SanitizedContent;

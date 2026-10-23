@@ -1,12 +1,12 @@
 import { basename, join } from "path";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BOOT_CD_FD_HD,
   BOOT_FD_CD_HD,
   config,
   saveExtension,
 } from "components/apps/V86/config";
-import { type V86ImageConfig, getImageType } from "components/apps/V86/image";
+import { getImageType, type V86ImageConfig } from "components/apps/V86/image";
 import {
   type NavigatorWithMemory,
   type V86Config,
@@ -15,10 +15,11 @@ import {
 import useV86ScreenSize from "components/apps/V86/useV86ScreenSize";
 import { type ContainerHookProps } from "components/system/Apps/AppContainer";
 import useTitle from "components/system/Window/useTitle";
-import { useFileSystem } from "contexts/fileSystem";
+import { useFileSystemActions } from "contexts/fileSystem";
 import { fs9pV4ToV3 } from "contexts/fileSystem/core";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
+import { hasProcess, useProcess } from "contexts/process";
+import { useForegroundId } from "contexts/session";
+import { useSnapshots } from "hooks/useSnapshots";
 import { SAVE_PATH, TRANSITIONS_IN_MILLISECONDS } from "utils/constants";
 import {
   bufferToUrl,
@@ -28,7 +29,6 @@ import {
   getHtmlToImage,
   loadFiles,
 } from "utils/functions";
-import { useSnapshots } from "hooks/useSnapshots";
 
 if (typeof window !== "undefined") {
   window.DEBUG = false;
@@ -41,66 +41,64 @@ const useV86 = ({
   setLoading,
   url,
 }: ContainerHookProps): void => {
-  const {
-    processes: { [id]: process },
-  } = useProcesses();
-  const { foregroundId } = useSession();
-  const { closing, libs = [] } = process || {};
+  const process = useProcess(id);
+  const foregroundId = useForegroundId();
+  const { closing, libs = [], minimized } = process;
   const { appendFileToTitle } = useTitle(id);
   const shutdown = useRef(false);
   const [emulator, setEmulator] = useState<
-    Record<string, V86Starter | undefined>
+    Record<string, undefined | V86Starter>
   >({});
-  const { exists, readFile } = useFileSystem();
-  const saveStateAsync = useCallback(
-    (diskImageUrl: string): Promise<ArrayBuffer> =>
-      new Promise((resolve, reject) => {
-        emulator[diskImageUrl]?.save_state().then(resolve).catch(reject);
-      }),
-    [emulator]
-  );
+  const { exists, readFile } = useFileSystemActions();
+  const saveStateAsync = (diskImageUrl: string): Promise<ArrayBuffer> =>
+    new Promise((resolve, reject) => {
+      emulator[diskImageUrl]?.save_state().then(resolve).catch(reject);
+    });
   const { createSnapshot } = useSnapshots();
-  const closeDiskImage = useCallback(
-    async (diskImageUrl: string, screenshot?: Buffer): Promise<void> => {
-      await createSnapshot(
-        `${basename(diskImageUrl)}${saveExtension}`,
-        Buffer.from(await saveStateAsync(diskImageUrl)),
-        screenshot
-      );
+  const closeDiskImage = async (
+    diskImageUrl: string,
+    screenshot?: Buffer
+  ): Promise<void> => {
+    await createSnapshot(
+      `${basename(diskImageUrl)}${saveExtension}`,
+      Buffer.from(await saveStateAsync(diskImageUrl)),
+      screenshot
+    );
 
+    if (emulator[diskImageUrl]) {
       try {
-        emulator[diskImageUrl]?.destroy();
+        emulator[diskImageUrl].destroy();
       } catch {
         // Ignore failures on destroy
       }
-    },
-    [createSnapshot, emulator, saveStateAsync]
-  );
-  const takeScreenshot = useCallback(
-    async (fileUrl: string): Promise<Buffer | undefined> => {
-      let screenshot: string | undefined;
+    }
+  };
+  const takeScreenshot = async (
+    fileUrl: string
+  ): Promise<Buffer | undefined> => {
+    let screenshot: string | undefined;
 
-      if (emulator[fileUrl]?.v86.cpu.devices.vga.graphical_mode) {
-        screenshot = (
-          containerRef.current?.querySelector("canvas") as HTMLCanvasElement
-        )?.toDataURL("image/png");
-      } else if (containerRef.current instanceof HTMLElement) {
-        const htmlToImage = await getHtmlToImage();
+    if (emulator[fileUrl]?.v86.cpu.devices.vga.graphical_mode) {
+      screenshot = (
+        containerRef.current?.querySelector("canvas") as HTMLCanvasElement
+      )?.toDataURL("image/png");
+    } else if (containerRef.current instanceof HTMLElement) {
+      const htmlToImage = await getHtmlToImage();
 
+      if (htmlToImage) {
         try {
-          screenshot = await htmlToImage?.toPng(containerRef.current, {
+          screenshot = await htmlToImage.toPng(containerRef.current, {
             skipAutoScale: true,
           });
         } catch {
           // Ignore failure to capture
         }
       }
+    }
 
-      return screenshot ? dataUrlToBuffer("image/png", screenshot) : undefined;
-    },
-    [containerRef, emulator]
-  );
-  const loadDiskImage = useCallback(async () => {
+    return screenshot ? dataUrlToBuffer("image/png", screenshot) : undefined;
+  };
+  const loadDiskImage = async (): Promise<void> => {
     const [currentUrl] = Object.keys(emulator);
 
     if (typeof currentUrl === "string") {
@@ -116,8 +114,9 @@ const useV86 = ({
     const ext = getExtension(url);
     const isISO = ext === ".iso";
     const bufferUrl = bufferToUrl(imageContents);
+    const imageType = isISO ? "cdrom" : getImageType(ext, imageContents.length);
     const v86ImageConfig: V86ImageConfig = {
-      [isISO ? "cdrom" : getImageType(ext, imageContents.length)]: {
+      [imageType]: {
         async: false,
         size: imageContents.length,
         url: bufferUrl,
@@ -170,16 +169,7 @@ const useV86 = ({
 
       setEmulator({ [url]: v86 });
     });
-  }, [
-    appendFileToTitle,
-    closeDiskImage,
-    containerRef,
-    emulator,
-    exists,
-    readFile,
-    takeScreenshot,
-    url,
-  ]);
+  };
 
   useV86ScreenSize(id, containerRef, emulator[url]);
 
@@ -192,15 +182,17 @@ const useV86 = ({
   }, [libs, loading, setLoading]);
 
   useEffect(() => {
-    const isActiveInstance = foregroundId === id;
+    // Minimized from the keyboard it stays in front, but has no keyboard
+    const isActiveInstance = foregroundId === id && !minimized;
 
     Object.values(emulator).forEach((emulatorInstance) =>
       emulatorInstance?.keyboard_set_status(isActiveInstance)
     );
-  }, [emulator, foregroundId, id]);
+  }, [emulator, foregroundId, id, minimized]);
 
   useEffect(() => {
-    if (process && !closing && !loading && !(url in emulator)) {
+    if (hasProcess(process) && !closing && !loading && !(url in emulator)) {
+      // eslint-disable-next-line react/set-state-in-effect -- False positive: state is only set after an await
       loadDiskImage();
     }
 

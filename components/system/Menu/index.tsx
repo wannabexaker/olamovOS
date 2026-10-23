@@ -1,17 +1,27 @@
+import { useEffect, useRef, useState } from "react";
 import { type Position } from "react-rnd";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
 import MenuItemEntry from "components/system/Menu/MenuItemEntry";
-import StyledMenu from "components/system/Menu/StyledMenu";
 import menuTransition from "components/system/Menu/menuTransition";
-import { useMenu } from "contexts/menu/index";
+import StyledMenu from "components/system/Menu/StyledMenu";
+import { useMenu, useMenuActions } from "contexts/menu/index";
 import { type MenuState } from "contexts/menu/useMenuContextState";
 import {
   FOCUSABLE_ELEMENT,
   ONE_TIME_PASSIVE_EVENT,
   PREVENT_SCROLL,
+  SYSTEM_MENU,
   TASKBAR_HEIGHT,
 } from "utils/constants";
 import { haltEvent, viewHeight, viewWidth } from "utils/functions";
+import {
+  focusByCharacter,
+  focusByKey,
+  isComposingKey,
+  isEditableElement,
+  isKeyboardNavigating,
+  isMenuElement,
+  isPrintableKey,
+} from "utils/keyboard";
 
 type MenuProps = {
   subMenu?: MenuState;
@@ -22,10 +32,35 @@ export const topLeftPosition = (): Position => ({
   y: 0,
 });
 
+const MENU_ITEM_SELECTOR = ":scope > ol > li > [role^=menuitem]";
+
+export const getMenuItems = (menu?: Element | null): HTMLElement[] => [
+  ...(menu?.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR) || []),
+];
+
+let menuInvoker: HTMLElement | undefined;
+
+// A menu opened from the keyboard took focus from what opened it
+let keyboardMenu = false;
+
+export const isKeyboardMenu = (): boolean => keyboardMenu;
+
+// Keys a menu without focus lets through, as they type or move on from it
+const PASSED_KEYS = new Set([
+  "AltGraph",
+  "CapsLock",
+  "Control",
+  "Meta",
+  "Shift",
+  "Tab",
+]);
+
 const Menu: FC<MenuProps> = ({ subMenu }) => {
-  const { menu: baseMenu = {}, setMenu } = useMenu();
+  const { setMenu } = useMenuActions();
+  const baseMenu = useMenu();
   const {
     items,
+    label,
     staticX = 0,
     staticY = 0,
     x = 0,
@@ -33,20 +68,28 @@ const Menu: FC<MenuProps> = ({ subMenu }) => {
   } = subMenu || baseMenu || {};
   const [offset, setOffset] = useState<Position>(topLeftPosition);
   const menuRef = useRef<HTMLElement | null>(null);
-  const resetMenu = useCallback(
-    ({ relatedTarget }: Partial<React.FocusEvent | React.MouseEvent> = {}) => {
+  const resetMenu = ({
+    relatedTarget,
+  }: Partial<React.FocusEvent | React.MouseEvent> = {}): void => {
+    if (!isMenuElement(relatedTarget)) {
+      setMenu(Object.create(null) as MenuState);
+
+      // What opened a keyboard menu skipped its blur while focus was in the
+      // menu, so it gets one now that focus went elsewhere
       if (
-        !(relatedTarget instanceof HTMLElement) ||
-        !menuRef.current?.contains(relatedTarget)
+        !subMenu &&
+        relatedTarget instanceof Element &&
+        !menuInvoker?.contains(relatedTarget)
       ) {
-        setMenu(Object.create(null) as MenuState);
+        menuInvoker?.dispatchEvent(
+          new FocusEvent("focusout", { bubbles: true, relatedTarget })
+        );
       }
-    },
-    [setMenu]
-  );
+    }
+  };
   const isSubMenu = Boolean(subMenu);
   const offsetCalculated = useRef<Partial<DOMRect>>({});
-  const calculateOffset = useCallback(() => {
+  const calculateOffset = (): void => {
     if (!menuRef.current) return;
 
     const {
@@ -108,29 +151,31 @@ const Menu: FC<MenuProps> = ({ subMenu }) => {
     }
 
     setOffset(newOffset);
-  }, [staticX, staticY, subMenu, x, y]);
-  const menuCallbackRef = useCallback(
-    (ref: HTMLElement) => {
-      menuRef.current = ref;
-      calculateOffset();
-    },
-    [calculateOffset]
-  );
+  };
+  const menuCallbackRef = (ref: HTMLElement): void => {
+    menuRef.current = ref;
+    calculateOffset();
+  };
 
   useEffect(() => {
     if ((subMenu || baseMenu)?.items && (x || y)) calculateOffset();
+    // eslint-disable-next-line react/exhaustive-effect-dependencies
   }, [baseMenu, calculateOffset, subMenu, x, y]);
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;
 
-    if (items && !subMenu) {
+    if (items && !subMenu && !isMenuElement(document.activeElement)) {
       const focusedElement = document.activeElement;
+
+      menuInvoker = undefined;
 
       if (
         focusedElement instanceof HTMLElement &&
         focusedElement !== document.body
       ) {
+        menuInvoker = focusedElement;
+
         const options: AddEventListenerOptions = {
           capture: true,
           ...ONE_TIME_PASSIVE_EVENT,
@@ -165,9 +210,16 @@ const Menu: FC<MenuProps> = ({ subMenu }) => {
             capture: true,
           });
         };
-      } else {
-        menuRef.current?.focus(PREVENT_SCROLL);
       }
+
+      // Like Windows, a keyboard menu takes focus with nothing highlighted until
+      // an arrow key, while a mouse menu or one from a text box leaves focus be
+      keyboardMenu =
+        Boolean(menuInvoker) &&
+        isKeyboardNavigating() &&
+        !isEditableElement(menuInvoker);
+
+      if (!menuInvoker || keyboardMenu) menuRef.current?.focus(PREVENT_SCROLL);
     }
 
     return cleanup;
@@ -175,20 +227,86 @@ const Menu: FC<MenuProps> = ({ subMenu }) => {
 
   useEffect(() => {
     if (!items) offsetCalculated.current = {};
-    // eslint-disable-next-line react-hooks-addons/no-unused-deps
+    // eslint-disable-next-line react/exhaustive-effect-dependencies
   }, [items, offset.x, offset.y, subMenu]);
 
   useEffect(() => {
-    const resetOnEscape = ({ key }: KeyboardEvent): void => {
-      if (key === "Escape") resetMenu();
+    // Keys are taken from wherever focus is while it's outside of the menu, as
+    // Windows menus capture the keyboard
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const { key, shiftKey } = event;
+      const { activeElement } = document;
+
+      if (isComposingKey(event) || menuRef.current?.contains(activeElement)) {
+        return;
+      }
+
+      const menuItems = getMenuItems(menuRef.current);
+
+      if (key === "Escape" || key === "Alt" || (key === "F10" && !shiftKey)) {
+        haltEvent(event);
+        resetMenu();
+      } else if (isEditableElement(activeElement) && label !== SYSTEM_MENU) {
+        // Typing goes on in a text box with suggestions showing
+        if (
+          (key === "ArrowDown" || key === "ArrowUp") &&
+          focusByKey(key, menuItems)
+        ) {
+          haltEvent(event);
+        }
+      } else if (!PASSED_KEYS.has(key)) {
+        haltEvent(event);
+
+        if (key === "Enter") resetMenu();
+        else if (
+          !focusByKey(key, menuItems, { horizontal: false }) &&
+          isPrintableKey(event)
+        ) {
+          focusByCharacter(key, menuItems);
+        }
+      }
     };
 
-    if (items) {
-      window.addEventListener("keydown", resetOnEscape, { passive: true });
+    if (items && !subMenu) {
+      window.addEventListener("keydown", onKeyDown, { capture: true });
     }
 
-    return () => window.removeEventListener("keydown", resetOnEscape);
-  }, [items, resetMenu]);
+    return () =>
+      window.removeEventListener("keydown", onKeyDown, { capture: true });
+  }, [items, label, resetMenu, subMenu]);
+
+  const closeMenu = (): void => {
+    resetMenu();
+    // Like Windows, focus goes back to where a keyboard-closed menu opened from
+    if (menuInvoker?.isConnected) menuInvoker.focus(PREVENT_SCROLL);
+  };
+  const onKeyDown: React.KeyboardEventHandler<HTMLElement> = (event) => {
+    const { key, shiftKey, target } = event;
+    const menuItems = getMenuItems(menuRef.current);
+
+    if (
+      target !== menuRef.current &&
+      !menuItems.includes(target as HTMLElement)
+    ) {
+      return;
+    }
+
+    if (key === "Tab") haltEvent(event);
+    else if (
+      key === "Alt" ||
+      (key === "F10" && !shiftKey) ||
+      // Enter with nothing highlighted closes it too
+      (!isSubMenu && (key === "Escape" || key === "Enter"))
+    ) {
+      haltEvent(event);
+      closeMenu();
+    } else if (
+      focusByKey(key, menuItems, { horizontal: false }) ||
+      (isPrintableKey(event) && focusByCharacter(key, menuItems))
+    ) {
+      haltEvent(event);
+    }
+  };
 
   return items ? (
     <StyledMenu
@@ -196,16 +314,20 @@ const Menu: FC<MenuProps> = ({ subMenu }) => {
       $isSubMenu={isSubMenu}
       $x={staticX || x - offset.x}
       $y={staticY || y - offset.y}
+      aria-label={label || "Context"}
       onBlurCapture={resetMenu}
       onContextMenu={haltEvent}
+      onKeyDown={onKeyDown}
+      role="menu"
       {...menuTransition}
       {...FOCUSABLE_ELEMENT}
     >
-      <ol>
+      <ol role="none">
         {items.map((item, index) => (
           <MenuItemEntry
             // eslint-disable-next-line react/no-array-index-key
             key={`${item.label || "item"}-${index}`}
+            closeMenu={closeMenu}
             isSubMenu={isSubMenu}
             resetMenu={resetMenu}
             {...item}
@@ -217,4 +339,4 @@ const Menu: FC<MenuProps> = ({ subMenu }) => {
   null;
 };
 
-export default memo(Menu);
+export default Menu;

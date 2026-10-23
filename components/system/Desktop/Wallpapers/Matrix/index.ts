@@ -15,7 +15,7 @@ declare global {
 
 const Matrix = async (
   el?: HTMLElement | null,
-  config: WallpaperConfig = {} as WallpaperConfig
+  config: WallpaperConfig = {}
 ): Promise<void> => {
   if (!el) return;
 
@@ -23,6 +23,7 @@ const Matrix = async (
 
   canvas.height = window.innerHeight;
   canvas.width = window.innerWidth;
+  canvas.setAttribute("aria-hidden", "true");
 
   el.append(canvas);
 

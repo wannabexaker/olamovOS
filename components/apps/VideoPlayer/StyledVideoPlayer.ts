@@ -16,6 +16,10 @@ const StyledVideoPlayer = styled.div`
     }
 
     .vjs-control-bar {
+      /* The light bar takes the focus visuals of light content */
+      --focus-inner: rgb(255 255 255);
+      --focus-outer: rgb(0 0 0);
+
       background-color: rgb(240 240 240);
       padding: 0 1px;
       z-index: 9999;
@@ -37,6 +41,10 @@ const StyledVideoPlayer = styled.div`
       .vjs-control-bar {
         opacity: 0% !important;
       }
+    }
+
+    :root[data-keyboard] & .vjs-control-bar:focus-within {
+      opacity: 100% !important;
     }
 
     .vjs-button {
@@ -127,6 +135,11 @@ const StyledVideoPlayer = styled.div`
         -webkit-text-stroke: 1px rgb(164 164 164 / 80%);
         top: 1px;
       }
+    }
+
+    .vjs-progress-control {
+      display: flex !important;
+      flex: auto !important;
     }
 
     .vjs-progress-holder {

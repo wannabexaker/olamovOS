@@ -3,13 +3,23 @@ import {
   SEARCH_BUTTON_TITLE,
   START_BUTTON_TITLE,
 } from "components/system/Taskbar/functions";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
-import { useViewport } from "contexts/viewport";
-import { useProcessesRef } from "hooks/useProcessesRef";
-import { KEYPRESS_DEBOUNCE_MS } from "utils/constants";
-import { haltEvent, toggleShowDesktop, viewHeight } from "utils/functions";
 import useWindowActions from "components/system/Window/Titlebar/useWindowActions";
+import {
+  getProcess,
+  getProcesses,
+  useProcessesActions,
+} from "contexts/process";
+import { useForegroundId, useStackOrder } from "contexts/session";
+import { useViewport } from "contexts/viewport";
+import { KEYPRESS_DEBOUNCE_MS, PREVENT_SCROLL } from "utils/constants";
+import { haltEvent, toggleShowDesktop, viewHeight } from "utils/functions";
+import {
+  focusDesktop,
+  isEditableElement,
+  openContextMenu,
+  trackKeyboardNavigation,
+  whenUnhandled,
+} from "utils/keyboard";
 
 declare global {
   interface Window {
@@ -27,7 +37,7 @@ export const getNavButtonByTitle = (
 ): HTMLButtonElement | undefined => {
   try {
     return document.querySelector(
-      `main > nav > div[title='${CSS.escape(title)}']`
+      `main > nav > [title='${CSS.escape(title)}']`
     ) as HTMLButtonElement;
   } catch {
     return undefined;
@@ -53,23 +63,68 @@ const haltAndDebounceBinding = (event: KeyboardEvent): boolean => {
 
 const metaCombos = new Set(["ARROWDOWN", "ARROWUP", "D", "E", "R", "S", "X"]);
 
+// Text fields keep these for selecting text & their own context menu
+const TEXT_FIELD_KEYS = new Set(["ARROWDOWN", "ARROWUP", "F10"]);
+
+// Terminals & code editors type into hidden text boxes, which select nothing
+const CODE_EDITOR_SELECTOR = ".monaco-editor, .xterm";
+
+const isTextFieldKey = (keyName: string, element: Element | null): boolean =>
+  TEXT_FIELD_KEYS.has(keyName) &&
+  isEditableElement(element) &&
+  (keyName === "F10" || !element?.closest(CODE_EDITOR_SELECTOR));
+
+const FLYOUT_SELECTORS: Record<string, string> = {
+  ESCAPE: "#startMenu",
+  S: "#searchMenu",
+};
+
 const updateKeyStates = (event: KeyboardEvent): void => {
-  const { altKey, ctrlKey, shiftKey, metaKey } = event;
+  const { altKey, ctrlKey, metaKey, shiftKey } = event;
 
   window.globalKeyStates = { altKey, ctrlKey, metaKey, shiftKey };
 };
 
+const focusedElement = (): HTMLElement | undefined =>
+  document.activeElement instanceof HTMLElement &&
+  document.activeElement !== document.body
+    ? document.activeElement
+    : undefined;
+
+const openWindowMenu = (id: string): void => {
+  const titlebar = getProcess(id)?.componentWindow?.querySelector("header");
+
+  if (titlebar) {
+    const { bottom, left } = titlebar.getBoundingClientRect();
+
+    titlebar.dispatchEvent(
+      new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: Math.round(left),
+        clientY: Math.round(bottom),
+        view: window,
+      })
+    );
+  }
+};
+
 const useGlobalKeyboardShortcuts = (): void => {
-  const { closeWithTransition, minimize, open } = useProcesses();
-  const processesRef = useProcessesRef();
-  const { foregroundId, stackOrder } = useSession();
+  const { minimize, open } = useProcessesActions();
+  const foregroundId = useForegroundId();
+  const stackOrder = useStackOrder();
   const { fullscreenElement, toggleFullscreen } = useViewport();
-  const { onMaximize, onMinimize } = useWindowActions(foregroundId);
+  const { onClose, onMaximize, onMinimize } = useWindowActions(foregroundId);
   const altBindingsRef = useRef<Record<string, () => void>>({});
   const shiftBindingsRef = useRef<Record<string, () => void>>({
     E: () => open("FileExplorer"),
     ESCAPE: () => getNavButtonByTitle(START_BUTTON_TITLE)?.click(),
-    F10: () => open("Terminal"),
+    F10: () => {
+      const element = focusedElement();
+
+      if (element) openContextMenu(element);
+      else open("Terminal");
+    },
     F12: () => open("DevTools"),
     F5: () => window.location.reload(),
     R: () => open("Run"),
@@ -87,15 +142,38 @@ const useGlobalKeyboardShortcuts = (): void => {
     const onKeyDown = (event: KeyboardEvent): void => {
       updateKeyStates(event);
 
-      const { altKey, ctrlKey, key, shiftKey } = event;
+      const { ctrlKey, key, shiftKey } = event;
       const keyName = key?.toUpperCase();
 
       if (!keyName) return;
 
-      if (shiftKey) {
+      // AltGr arrives as Ctrl+Alt, though it is typing a character
+      const altKey = event.altKey && !event.getModifierState("AltGraph");
+
+      if (
+        keyName === "CONTEXTMENU" &&
+        !isEditableElement(document.activeElement)
+      ) {
+        // Unless an app like V86 kept the key for itself
+        whenUnhandled(event, () => {
+          const element = focusedElement() || focusDesktop();
+
+          event.preventDefault();
+          if (element) openContextMenu(element);
+        });
+      } else if (shiftKey) {
+        const { activeElement } = document;
+        const flyout = FLYOUT_SELECTORS[keyName];
+
+        // A flyout's own shortcut is left to it, which closes it like Escape
+        if (flyout && document.querySelector(flyout)?.contains(activeElement)) {
+          return;
+        }
+
         if (
           (ctrlKey || !metaCombos.has(keyName)) &&
           shiftBindingsRef.current?.[keyName] &&
+          !isTextFieldKey(keyName, activeElement) &&
           !haltAndDebounceBinding(event)
         ) {
           shiftBindingsRef.current[keyName]();
@@ -113,6 +191,7 @@ const useGlobalKeyboardShortcuts = (): void => {
           })
         );
       } else if (ctrlKey && altKey && altBindingsRef.current?.[keyName]) {
+        haltEvent(event);
         altBindingsRef.current?.[keyName]?.();
       } else if (fullscreenElement === document.documentElement) {
         if (keyName === "META") metaDown = true;
@@ -120,8 +199,11 @@ const useGlobalKeyboardShortcuts = (): void => {
           haltEvent(event);
           altBindingsRef.current?.[keyName]?.();
         } else if (keyName === "ESCAPE") {
-          if (document.pointerLockElement) document.exitPointerLock();
-          else toggleFullscreen();
+          // Unless something in the page, like a menu or dialog, used it
+          whenUnhandled(event, () => {
+            if (document.pointerLockElement) document.exitPointerLock();
+            else toggleFullscreen();
+          });
         } else if (
           metaDown &&
           metaCombos.has(keyName) &&
@@ -165,12 +247,15 @@ const useGlobalKeyboardShortcuts = (): void => {
     };
   }, [fullscreenElement, toggleFullscreen]);
 
+  useEffect(trackKeyboardNavigation, []);
+
   useEffect(() => {
     altBindingsRef.current = {
       ...altBindingsRef.current,
-      F4: () => closeWithTransition(foregroundId),
+      " ": () => openWindowMenu(foregroundId),
+      F4: () => foregroundId && onClose(),
     };
-  }, [closeWithTransition, foregroundId]);
+  }, [foregroundId, onClose]);
 
   useEffect(() => {
     shiftBindingsRef.current = {
@@ -180,12 +265,15 @@ const useGlobalKeyboardShortcuts = (): void => {
           hideMinimizeButton = false,
           maximized,
           minimized,
-        } = processesRef.current[foregroundId] || {};
+          taskbarEntry,
+        } = getProcess(foregroundId) || {};
 
         if (maximized) {
           onMaximize();
         } else if (!minimized && !hideMinimizeButton) {
           onMinimize(true);
+          // Focus waits on its taskbar button, from where it can come back
+          taskbarEntry?.focus(PREVENT_SCROLL);
         }
       },
       ARROWUP: () => {
@@ -194,7 +282,7 @@ const useGlobalKeyboardShortcuts = (): void => {
           hideMaximizeButton = false,
           maximized,
           minimized,
-        } = processesRef.current[foregroundId] || {};
+        } = getProcess(foregroundId) || {};
 
         if (minimized) {
           onMinimize(true);
@@ -202,16 +290,9 @@ const useGlobalKeyboardShortcuts = (): void => {
           onMaximize();
         }
       },
-      D: () => toggleShowDesktop(processesRef.current, stackOrder, minimize),
+      D: () => toggleShowDesktop(getProcesses(), stackOrder, minimize),
     };
-  }, [
-    foregroundId,
-    minimize,
-    onMaximize,
-    onMinimize,
-    processesRef,
-    stackOrder,
-  ]);
+  }, [foregroundId, minimize, onMaximize, onMinimize, stackOrder]);
 };
 
 export default useGlobalKeyboardShortcuts;

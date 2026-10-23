@@ -1,31 +1,34 @@
-import { useRef, useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { DEFAULT_INTERSECTION_OPTIONS } from "utils/constants";
 
 export const useIsVisible = (
   elementRef: React.RefObject<HTMLElement | null>,
-  parentSelector?: string | React.RefObject<HTMLElement | null>,
+  parentSelector?: React.RefObject<HTMLElement | null> | string,
   alwaysVisible = false
 ): boolean => {
-  const watching = useRef(false);
   const [isVisible, setIsVisible] = useState(alwaysVisible);
 
   useEffect(() => {
-    if (alwaysVisible || !elementRef.current || watching.current) return;
+    let observer: IntersectionObserver;
 
-    watching.current = true;
+    if (!alwaysVisible && elementRef.current) {
+      observer = new IntersectionObserver(
+        (entries) =>
+          entries.forEach(({ isIntersecting }) => setIsVisible(isIntersecting)),
+        {
+          root:
+            (typeof parentSelector === "object" && parentSelector.current) ||
+            (typeof parentSelector === "string" &&
+              elementRef.current.closest(parentSelector)) ||
+            elementRef.current.parentElement,
+          ...DEFAULT_INTERSECTION_OPTIONS,
+        }
+      );
 
-    new IntersectionObserver(
-      (entries) =>
-        entries.forEach(({ isIntersecting }) => setIsVisible(isIntersecting)),
-      {
-        root:
-          (typeof parentSelector === "object" && parentSelector.current) ||
-          (typeof parentSelector === "string" &&
-            elementRef.current.closest(parentSelector)) ||
-          elementRef.current.parentElement,
-        ...DEFAULT_INTERSECTION_OPTIONS,
-      }
-    ).observe(elementRef.current);
+      observer.observe(elementRef.current);
+    }
+
+    return () => observer?.disconnect();
   }, [alwaysVisible, elementRef, parentSelector]);
 
   return isVisible;

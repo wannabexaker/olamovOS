@@ -1,6 +1,6 @@
 import {
-  type WallpaperMenuItem,
   type WallpaperFunc,
+  type WallpaperMenuItem,
 } from "components/system/Desktop/Wallpapers/types";
 import { type WallpaperFit } from "contexts/session/types";
 
@@ -14,10 +14,11 @@ export const bgPositionSize: Record<WallpaperFit, string> = {
 
 export const WALLPAPER_PATHS: Record<
   string,
-  () => Promise<{ default: WallpaperFunc; libs: string[] }>
+  () => Promise<{ default: WallpaperFunc; libs?: string[] }>
 > = {
   COASTAL_LANDSCAPE: () =>
     import("components/system/Desktop/Wallpapers/ShaderToy/CoastalLandscape"),
+  GALAXY: () => import("components/system/Desktop/Wallpapers/Galaxy"),
   HEXELLS: () => import("components/system/Desktop/Wallpapers/hexells"),
   MATRIX: () => import("components/system/Desktop/Wallpapers/Matrix"),
   STABLE_DIFFUSION: () =>
@@ -33,6 +34,14 @@ export const WALLPAPER_WORKERS: Record<string, () => Worker> = {
         import.meta.url
       ),
       { name: "Wallpaper (Coastal Landscape)" }
+    ),
+  GALAXY: (): Worker =>
+    new Worker(
+      new URL(
+        "components/system/Desktop/Wallpapers/Galaxy/wallpaper.worker",
+        import.meta.url
+      ),
+      { name: "Wallpaper (Galaxy)" }
     ),
   HEXELLS: (): Worker =>
     new Worker(
@@ -93,6 +102,10 @@ export const WALLPAPER_MENU: WallpaperMenuItem[] = [
     name: "Metropolitan Museum of Art",
   },
   {
+    id: "GALAXY",
+    name: "Milky Way",
+  },
+  {
     id: "APOD",
     name: "NASA APOD",
   },
@@ -112,7 +125,7 @@ export const WALLPAPER_MENU: WallpaperMenuItem[] = [
   },
 ];
 
-export const BASE_CANVAS_SELECTOR = ":scope > canvas";
+export const BASE_CANVAS_SELECTOR = ":scope > canvas:not(#desktop-fly)";
 
 export const BASE_VIDEO_SELECTOR = ":scope > video";
 

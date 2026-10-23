@@ -1,27 +1,27 @@
 import { basename, dirname } from "path";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type Stats from "browserfs/dist/node/core/node_fs_stats";
+import { useEffect, useRef, useState } from "react";
 import { getModifiedTime } from "components/system/Files/FileEntry/functions";
+import SubIcons from "components/system/Files/FileEntry/SubIcons";
 import { UNKNOWN_ICON } from "components/system/Files/FileManager/icons";
+import {
+  fileType,
+  getResultInfo,
+  type ResultInfo,
+} from "components/system/Taskbar/Search/functions";
 import {
   Open,
   OpenFolder,
   RightArrow,
 } from "components/system/Taskbar/Search/Icons";
 import StyledDetails from "components/system/Taskbar/Search/StyledDetails";
-import {
-  type ResultInfo,
-  fileType,
-  getResultInfo,
-} from "components/system/Taskbar/Search/functions";
-import { useFileSystem } from "contexts/fileSystem";
+import { useFileSystemActions, useFs } from "contexts/fileSystem";
 import { type ProcessArguments } from "contexts/process/types";
-import { useSession } from "contexts/session";
+import { useSessionActions } from "contexts/session";
 import Button from "styles/common/Button";
 import Icon from "styles/common/Icon";
 import { DEFAULT_LOCALE, ROOT_NAME, SHORTCUT_EXTENSION } from "utils/constants";
-import { getExtension, isYouTubeUrl } from "utils/functions";
-import SubIcons from "components/system/Files/FileEntry/SubIcons";
+import { getExtension, isYouTubeUrl, label } from "utils/functions";
 
 const Details: FC<{
   openApp: (pid: string, args?: ProcessArguments) => void;
@@ -29,51 +29,15 @@ const Details: FC<{
   singleLineView: boolean;
   url: string;
 }> = ({ openApp, setActiveItem, singleLineView, url }) => {
-  const { fs, stat } = useFileSystem();
+  const { stat } = useFileSystemActions();
+  const fs = useFs();
   const [stats, setStats] = useState<Stats>();
   const [info, setInfo] = useState<ResultInfo>({
     icon: UNKNOWN_ICON,
   } as ResultInfo);
-  const extension = useMemo(
-    () => getExtension(info?.url || url),
-    [info?.url, url]
-  );
-  const { updateRecentFiles } = useSession();
-  const openFile = useCallback(() => {
-    openApp(info?.pid, { url: info?.url });
-    if (info?.url && info?.pid) updateRecentFiles(info?.url, info?.pid);
-  }, [info?.pid, info?.url, openApp, updateRecentFiles]);
+  const { updateRecentFiles } = useSessionActions();
   const elementRef = useRef<HTMLDivElement>(null);
-  const isYTUrl = useMemo(
-    () => (info?.url ? isYouTubeUrl(info.url) : false),
-    [info?.url]
-  );
-  const isNostrUrl = useMemo(
-    () => (info?.url ? info.url.startsWith("nostr:") : false),
-    [info?.url]
-  );
-  const isAppShortcut = useMemo(
-    () =>
-      info?.pid
-        ? url === info.url && getExtension(url) === SHORTCUT_EXTENSION
-        : false,
-    [info?.pid, info?.url, url]
-  );
-  const isDirectory = useMemo(
-    () => stats?.isDirectory() || (!extension && !isYTUrl && !isNostrUrl),
-    [extension, isNostrUrl, isYTUrl, stats]
-  );
-  const baseUrl = isYTUrl || isNostrUrl ? url : info?.url;
   const currentUrlRef = useRef(url);
-  const name = useMemo(
-    () =>
-      baseUrl === "/"
-        ? ROOT_NAME
-        : baseUrl
-          ? basename(baseUrl, SHORTCUT_EXTENSION)
-          : "",
-    [baseUrl]
-  );
 
   useEffect(() => {
     stat(url).then(
@@ -89,36 +53,63 @@ const Details: FC<{
     currentUrlRef.current = url;
   }, [url]);
 
+  const extension = getExtension(info?.url || url);
+  const openFile = (): void => {
+    openApp(info?.pid, { url: info?.url });
+    if (info?.url && info?.pid) updateRecentFiles(info?.url, info?.pid);
+  };
+  const isYTUrl = info?.url ? isYouTubeUrl(info.url) : false;
+  const isNostrUrl = info?.url ? info.url.startsWith("nostr:") : false;
+  const isAppShortcut = info?.pid
+    ? url === info.url && getExtension(url) === SHORTCUT_EXTENSION
+    : false;
+  const isDirectory =
+    stats?.isDirectory() || (!extension && !isYTUrl && !isNostrUrl);
+  const baseUrl = isYTUrl || isNostrUrl ? url : info?.url;
+  const name =
+    baseUrl === "/"
+      ? ROOT_NAME
+      : baseUrl
+        ? basename(baseUrl, SHORTCUT_EXTENSION)
+        : "";
+
   return info?.url && stats ? (
     <StyledDetails ref={elementRef}>
       {singleLineView && (
-        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
-        <div className="back" onClick={() => setActiveItem("")}>
+        <button
+          className="back"
+          onClick={() => setActiveItem("")}
+          type="button"
+          {...label("Back")}
+        >
           <RightArrow />
-        </div>
+        </button>
       )}
-      <Icon displaySize={64} imgSize={96} src={info?.icon} />
+      <Icon alt="" displaySize={64} imgSize={96} src={info?.icon} />
       <SubIcons
-        alt={name}
+        alt=""
         icon={info?.icon}
         imgSize={64}
         showShortcutIcon={false}
         subIcons={info?.subIcons}
         view="icon"
       />
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
-      <h1 onClick={openFile}>{name}</h1>
+      <h1>
+        <button onClick={openFile} type="button">
+          {name}
+        </button>
+      </h1>
       <h2>{fileType(stats, extension, isYTUrl, isAppShortcut, isNostrUrl)}</h2>
       {!isAppShortcut && info?.url && (
         <table>
           <tbody>
             <tr>
-              <th>Location</th>
+              <th scope="row">Location</th>
               <td onClick={openFile}>{info.url}</td>
             </tr>
             {!isYTUrl && !isNostrUrl && !isDirectory && (
               <tr>
-                <th>Last modified</th>
+                <th scope="row">Last modified</th>
                 <td>
                   {new Date(getModifiedTime(info.url, stats)).toLocaleString(
                     DEFAULT_LOCALE
@@ -157,4 +148,4 @@ const Details: FC<{
   );
 };
 
-export default memo(Details);
+export default Details;

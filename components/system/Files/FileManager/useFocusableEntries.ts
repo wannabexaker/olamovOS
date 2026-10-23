@@ -1,11 +1,9 @@
-import { useCallback, useRef, useState } from "react";
-import { useTheme } from "styled-components";
-import { getTextWrapData } from "components/system/Files/FileEntry/functions";
-import { PREVENT_SCROLL, SHORTCUT_EXTENSION } from "utils/constants";
+import { useRef, useState } from "react";
+import { PREVENT_SCROLL } from "utils/constants";
 import { haltEvent } from "utils/functions";
+import { isKeyboardInMenu } from "utils/keyboard";
 
 type FocusedEntryProps = {
-  $labelHeightOffset: number;
   className?: string;
   onBlurCapture: React.FocusEventHandler;
   onFocusCapture: React.FocusEventHandler;
@@ -26,154 +24,100 @@ type FocusableEntries = FocusEntryFunctions & {
 };
 
 const useFocusableEntries = (
-  fileManagerRef: React.RefObject<HTMLOListElement | null>,
-  adjustLabelMargin: boolean
+  fileManagerRef: React.RefObject<HTMLOListElement | null>
 ): FocusableEntries => {
   const [focusedEntries, setFocusedEntries] = useState<string[]>([]);
-  const blurEntry = useCallback(
-    (entry?: string): void =>
-      setFocusedEntries(
-        entry
-          ? (currentFocusedEntries) =>
-              currentFocusedEntries.filter(
-                (focusedEntry) => focusedEntry !== entry
-              )
-          : []
-      ),
-    []
-  );
-  const focusEntry = useCallback(
-    (entry: string): void =>
-      setFocusedEntries((currentFocusedEntries) =>
-        currentFocusedEntries.includes(entry)
-          ? currentFocusedEntries
-          : [...currentFocusedEntries, entry]
-      ),
-    []
-  );
+  const blurEntry = (entry?: string): void =>
+    setFocusedEntries(
+      entry
+        ? (currentFocusedEntries) =>
+            currentFocusedEntries.filter(
+              (focusedEntry) => focusedEntry !== entry
+            )
+        : []
+    );
+  const focusEntry = (entry: string): void =>
+    setFocusedEntries((currentFocusedEntries) =>
+      currentFocusedEntries.includes(entry)
+        ? currentFocusedEntries
+        : [...currentFocusedEntries, entry]
+    );
   const focusingRef = useRef(false);
-  const onBlurCapture: React.FocusEventHandler = useCallback(
-    (event) => {
-      const { relatedTarget, target } = event;
-      const isFileManagerFocus = fileManagerRef.current === relatedTarget;
+  const onBlurCapture: React.FocusEventHandler = (event) => {
+    const { relatedTarget, target } = event;
+    const isFileManagerFocus = fileManagerRef.current === relatedTarget;
 
-      if (isFileManagerFocus && focusingRef.current) {
-        haltEvent(event);
-        (target as HTMLElement)?.focus(PREVENT_SCROLL);
-      } else if (
-        (!isFileManagerFocus &&
-          !fileManagerRef.current?.contains(relatedTarget)) ||
-        !(relatedTarget instanceof HTMLElement)
-      ) {
-        blurEntry();
-      }
-    },
-    [blurEntry, fileManagerRef]
-  );
-  const onFocusCapture: React.FocusEventHandler = useCallback(() => {
+    if (isFileManagerFocus && focusingRef.current) {
+      haltEvent(event);
+      (target as HTMLElement)?.focus(PREVENT_SCROLL);
+    } else if (
+      (!fileManagerRef.current?.contains(relatedTarget) ||
+        !(relatedTarget instanceof HTMLElement)) &&
+      !isKeyboardInMenu(relatedTarget)
+    ) {
+      blurEntry();
+    }
+  };
+  const onFocusCapture: React.FocusEventHandler = () => {
     focusingRef.current = true;
     window.requestAnimationFrame(() => {
       focusingRef.current = false;
     });
-  }, []);
+  };
   const mouseDownPositionRef = useRef({ x: 0, y: 0 });
-  const { formats, sizes } = useTheme();
-  const focusableEntry = useCallback(
-    (file: string): FocusedEntryProps => {
-      const isFocused = focusedEntries.includes(file);
-      const className = isFocused ? "focus-within" : undefined;
-      const onMouseDown: React.MouseEventHandler = ({
-        ctrlKey,
-        pageX,
-        pageY,
-      }) => {
-        mouseDownPositionRef.current = { x: pageX, y: pageY };
+  const focusableEntry = (file: string): FocusedEntryProps => {
+    const isFocused = focusedEntries.includes(file);
+    const className = isFocused ? "focus-within" : undefined;
+    const onMouseDown: React.MouseEventHandler = ({
+      ctrlKey,
+      pageX,
+      pageY,
+    }) => {
+      mouseDownPositionRef.current = { x: pageX, y: pageY };
 
-        if (ctrlKey) {
-          if (isFocused) {
-            blurEntry(file);
-          } else {
-            focusEntry(file);
-          }
-        } else if (!isFocused) {
-          blurEntry();
+      if (ctrlKey) {
+        if (isFocused) {
+          blurEntry(file);
+        } else {
           focusEntry(file);
         }
-      };
-      const onMouseUp: React.MouseEventHandler = ({
-        ctrlKey,
-        pageX,
-        pageY,
-        button,
-      }) => {
-        const { x, y } = mouseDownPositionRef.current;
+      } else if (!isFocused) {
+        blurEntry();
+        focusEntry(file);
+      }
+    };
+    const onMouseUp: React.MouseEventHandler = ({
+      button,
+      ctrlKey,
+      pageX,
+      pageY,
+    }) => {
+      const { x, y } = mouseDownPositionRef.current;
 
-        if (
-          !ctrlKey &&
-          button === 0 &&
-          x === pageX &&
-          y === pageY &&
-          focusedEntries.length !== 1 &&
-          focusedEntries[0] !== file
-        ) {
-          blurEntry();
-          focusEntry(file);
-        }
-
-        mouseDownPositionRef.current = { x: 0, y: 0 };
-      };
-      const textLabel = file.replace(SHORTCUT_EXTENSION, "");
-      let $labelHeightOffset = 0;
-
-      if (adjustLabelMargin) {
-        const { lines } = getTextWrapData(
-          textLabel,
-          sizes.fileEntry.fontSize,
-          formats.systemFont,
-          sizes.fileEntry.maxIconTextDisplayWidth
-        );
-
-        if (lines.length > 1) {
-          try {
-            const element = fileManagerRef.current?.querySelector(
-              `[aria-label='${CSS.escape(textLabel)}'] figcaption`
-            );
-
-            if (element) {
-              $labelHeightOffset =
-                (lines.length - 1) *
-                Number.parseFloat(window.getComputedStyle(element).lineHeight);
-            }
-          } catch {
-            // Ignore error getting element
-          }
-        }
+      if (
+        !ctrlKey &&
+        button === 0 &&
+        x === pageX &&
+        y === pageY &&
+        focusedEntries.length !== 1 &&
+        focusedEntries[0] !== file
+      ) {
+        blurEntry();
+        focusEntry(file);
       }
 
-      return {
-        $labelHeightOffset,
-        className,
-        onBlurCapture,
-        onFocusCapture,
-        onMouseDown,
-        onMouseUp,
-      };
-    },
-    [
-      adjustLabelMargin,
-      blurEntry,
-      fileManagerRef,
-      focusEntry,
-      focusedEntries,
-      formats.systemFont,
+      mouseDownPositionRef.current = { x: 0, y: 0 };
+    };
+    return {
+      className,
       onBlurCapture,
       onFocusCapture,
-      sizes.fileEntry.fontSize,
-      sizes.fileEntry.maxIconTextDisplayWidth,
-    ]
-  );
+      onMouseDown,
+      onMouseUp,
+    };
+  };
 
-  return { blurEntry, focusEntry, focusableEntry, focusedEntries };
+  return { blurEntry, focusableEntry, focusedEntries, focusEntry };
 };
 
 export default useFocusableEntries;

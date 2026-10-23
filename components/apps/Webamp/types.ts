@@ -74,7 +74,7 @@ type UpdateWindowPositions = {
   type: "UPDATE_WINDOW_POSITIONS";
 };
 
-export type WebampCI = Webamp & {
+export type WebampCI = Omit<Webamp, "store"> & {
   _actionEmitter: {
     on: (
       event: string,
@@ -101,8 +101,13 @@ export type WebampCI = Webamp & {
       display?: {
         closed: boolean;
       };
+      media?: {
+        status?: string;
+        volume?: number;
+      };
       milkdrop?: {
         butterchurn?: unknown;
+        display?: "DESKTOP" | null;
         presetHistory?: number[];
         presets?: ButterChurnPreset[];
       };
@@ -141,10 +146,10 @@ export type WebampApiResponse = {
 
 declare global {
   interface Window {
-    Webamp: typeof Webamp;
-    WebampGlobal: WebampCI;
     butterchurn: {
       default: unknown;
     };
+    Webamp: typeof Webamp;
+    WebampGlobal: WebampCI;
   }
 }

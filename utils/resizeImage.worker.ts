@@ -16,9 +16,14 @@ globalThis.addEventListener(
 
       if (!ctx) return;
 
-      const bitmap = await createImageBitmap(blob);
+      const bitmap = await createImageBitmap(blob).catch(() => {
+        // Ignore unsupported image
+      });
 
-      if (!bitmap) return;
+      if (!bitmap) {
+        globalThis.postMessage(undefined);
+        return;
+      }
 
       const offscreenCanvas = canvas;
       const ratio = Math.min(
@@ -31,6 +36,7 @@ globalThis.addEventListener(
       offscreenCanvas.width = dw;
       offscreenCanvas.height = dh;
 
+      ctx.imageSmoothingQuality = "high";
       ctx.drawImage(bitmap, 0, 0, dw, dh);
 
       globalThis.postMessage(

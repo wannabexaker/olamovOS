@@ -1,5 +1,6 @@
 import { dirname, extname } from "path";
 import { expect, test } from "@playwright/test";
+import { UNKNOWN_ICON } from "components/system/Files/FileManager/icons";
 import {
   BASE_APP_FAVICON,
   BASE_APP_TITLE,
@@ -43,6 +44,7 @@ import {
   clickFileExplorerNavButton,
   clickFileExplorerSearchBox,
   clickFirstDesktopEntry,
+  closePage,
   contextMenuEntryIsHidden,
   contextMenuEntryIsVisible,
   contextMenuHasCount,
@@ -73,16 +75,16 @@ import {
   typeInFileExplorerAddressBar,
   typeInFileExplorerSearchBox,
   windowAnimationIsFinished,
-  windowTitlebarTextIsVisible,
   windowsAreVisible,
+  windowTitlebarTextIsVisible,
 } from "e2e/functions";
-import { UNKNOWN_ICON } from "components/system/Files/FileManager/icons";
 
 test.beforeEach(captureConsoleLogs());
 test.beforeEach(disableWallpaper);
 test.beforeEach(async ({ page }) => loadApp({ app: "FileExplorer" })({ page }));
 test.beforeEach(windowsAreVisible);
 test.beforeEach(fileExplorerEntriesAreVisible);
+test.afterEach(closePage);
 
 test("has address bar", async ({ page }) => {
   await fileExplorerAddressBarHasValue(TEST_APP_TITLE, { page });
@@ -311,18 +313,18 @@ test.describe("has files & folders", () => {
     await expect(entryInfo).toContainText(/^\d+ items$/);
     await expect(selectedInfo).toContainText(/^1 item selected|\d{3} bytes$/);
 
-    expect(
-      await page.locator(FILE_EXPLORER_ENTRIES_FOCUSED_SELECTOR).count()
-    ).toEqual(1);
+    await expect(
+      page.locator(FILE_EXPLORER_ENTRIES_FOCUSED_SELECTOR)
+    ).toHaveCount(1);
 
     await page.keyboard.down("Control");
     await clickFileExplorerEntry(TEST_ROOT_FILE_2, { page });
 
     await expect(selectedInfo).toContainText(/^2 items selected|\d{3} KB$/);
 
-    expect(
-      await page.locator(FILE_EXPLORER_ENTRIES_FOCUSED_SELECTOR).count()
-    ).toEqual(2);
+    await expect(
+      page.locator(FILE_EXPLORER_ENTRIES_FOCUSED_SELECTOR)
+    ).toHaveCount(2);
   });
 
   test("has tooltip", async ({ page }) => {

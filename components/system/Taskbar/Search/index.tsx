@@ -1,8 +1,8 @@
 import { basename, extname } from "path";
-import { useTheme } from "styled-components";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { m as motion } from "motion/react";
 import dynamic from "next/dynamic";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTheme } from "styled-components";
 import { Search as SearchIcon } from "components/apps/FileExplorer/NavigationIcons";
 import {
   getCachedShortcut,
@@ -15,6 +15,10 @@ import {
   Pictures,
   Videos,
 } from "components/system/StartMenu/Sidebar/SidebarIcons";
+import {
+  maybeCloseTaskbarMenu,
+  SEARCH_BUTTON_TITLE,
+} from "components/system/Taskbar/functions";
 import { Games } from "components/system/Taskbar/Search/Icons";
 import StyledFiles from "components/system/Taskbar/Search/StyledFiles";
 import StyledResults from "components/system/Taskbar/Search/StyledResults";
@@ -23,17 +27,13 @@ import StyledSections from "components/system/Taskbar/Search/StyledSections";
 import StyledSuggestions from "components/system/Taskbar/Search/StyledSuggestions";
 import StyledTabs from "components/system/Taskbar/Search/StyledTabs";
 import useSearchInputTransition from "components/system/Taskbar/Search/useSearchInputTransition";
-import {
-  SEARCH_BUTTON_TITLE,
-  maybeCloseTaskbarMenu,
-} from "components/system/Taskbar/functions";
 import useTaskbarItemTransition from "components/system/Taskbar/useTaskbarItemTransition";
 import { CloseIcon } from "components/system/Window/Titlebar/WindowActionIcons";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
+import { useFileSystemActions } from "contexts/fileSystem";
+import { useProcessesActions } from "contexts/process";
 import directory from "contexts/process/directory";
 import { type ProcessArguments } from "contexts/process/types";
-import { useSession } from "contexts/session";
+import { useRecentFiles, useSessionActions } from "contexts/session";
 import Button from "styles/common/Button";
 import Icon from "styles/common/Icon";
 import {
@@ -46,7 +46,15 @@ import {
   TRANSITIONS_IN_SECONDS,
   VIDEOS_FOLDER,
 } from "utils/constants";
-import { haltEvent, label, preloadLibs } from "utils/functions";
+import { getExtension, haltEvent, label, preloadLibs } from "utils/functions";
+import {
+  focusByKey,
+  isComposingKey,
+  isKeyboardNavigating,
+  isPrintableKey,
+  isVisibleElement,
+  restoreFocus,
+} from "utils/keyboard";
 import {
   FILE_INDEX,
   SEARCH_INPUT_PROPS,
@@ -114,11 +122,21 @@ const ResultSection = dynamic(
   () => import("components/system/Taskbar/Search/ResultSection")
 );
 
+const getResultButtons = (menu: HTMLElement | null): HTMLElement[] =>
+  [
+    ...(menu?.querySelectorAll<HTMLElement>(
+      ".content .list li > button:not(.select), .content section li > button"
+    ) || []),
+  ].filter(isVisibleElement);
+
 const Search: FC<SearchProps> = ({ toggleSearch }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const menuRef = useRef<HTMLElement | null>(null);
-  const { recentFiles = [], updateRecentFiles } = useSession();
-  const { lstat, readFile } = useFileSystem();
+  const returnFocusRef = useRef<Element | null>(null);
+  const closingRef = useRef(false);
+  const { updateRecentFiles } = useSessionActions();
+  const recentFiles = useRecentFiles();
+  const { lstat, readFile } = useFileSystemActions();
   const [activeTab, setActiveTab] = useState<TabName>("All");
   const {
     sizes: { search },
@@ -133,67 +151,73 @@ const Search: FC<SearchProps> = ({ toggleSearch }) => {
   );
   const inputTransition = useSearchInputTransition();
   const [showCaret, setShowCaret] = useState(false);
-  const focusOnRenderCallback = useCallback(
-    (element: HTMLInputElement | null) => {
-      element?.focus(PREVENT_SCROLL);
-      setTimeout(() => setShowCaret(true), 400);
-      inputRef.current = element;
-    },
-    []
-  );
+
+  // Before motion starts the slide-in, as focusing forces a layout
+  useLayoutEffect(() => {
+    if (!menuRef.current?.contains(document.activeElement)) {
+      returnFocusRef.current = document.activeElement;
+    }
+    inputRef.current?.focus(PREVENT_SCROLL);
+    setTimeout(() => setShowCaret(true), 400);
+  }, []);
+
   const [searchTerm, setSearchTerm] = useState("");
   const results = useSearch(searchTerm);
   const [bestMatch, setBestMatch] = useState("");
   const [activeItem, setActiveItem] = useState("");
-  const { open } = useProcesses();
+  const { open } = useProcessesActions();
   const [subResults, setSubResults] = useState<[string, lunr.Index.Result[]][]>(
     []
   );
-  const firstResult = useMemo(
-    () =>
-      activeTab === "All"
-        ? results[0]
-        : Object.fromEntries(subResults)[activeTab]?.[0],
-    [activeTab, results, subResults]
-  );
-  const listRef = useRef<HTMLDivElement | null>(null);
-  const changeTab = useCallback(
-    (tab: TabName) => {
-      if (inputRef.current) {
-        inputRef.current.value = (
-          tab === "All"
-            ? inputRef.current.value
-            : `${tab}: ${inputRef.current.value}`
-        ).replace(`${activeTab}: `, "");
-        listRef.current?.scrollTo(0, 0);
-      }
 
-      setActiveItem("");
-      setActiveTab(tab);
-    },
-    [activeTab]
-  );
-  const openApp = useCallback(
-    (pid: string, args?: ProcessArguments) => {
-      toggleSearch(false);
-      open(pid, args);
-    },
-    [open, toggleSearch]
-  );
+  if (results.length === 0 && subResults.length > 0) setSubResults([]);
+
+  const [resultsStatus, setResultsStatus] = useState("");
+  const resultsStatusTimeoutRef = useRef(0);
+  const tabResults =
+    activeTab === "All"
+      ? results
+      : Object.fromEntries(subResults)[activeTab] || [];
+  const shownResults = tabResults.length;
+
+  useEffect(() => {
+    // Waits for typing & results to settle so only the final count is told
+    resultsStatusTimeoutRef.current = window.setTimeout(
+      () =>
+        setResultsStatus(
+          searchTerm
+            ? shownResults > 0
+              ? `${shownResults} result${shownResults === 1 ? "" : "s"}`
+              : `No results found for '${searchTerm}'`
+            : ""
+        ),
+      MILLISECONDS_IN_SECOND / 2
+    );
+
+    return () => window.clearTimeout(resultsStatusTimeoutRef.current);
+  }, [searchTerm, shownResults]);
+
+  const firstResult = tabResults[0];
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const openApp = (pid: string, args?: ProcessArguments): void => {
+    toggleSearch(false);
+    open(pid, args);
+  };
   const searchTimeoutRef = useRef(0);
   const preloadedSearch = useRef(false);
-  const preloadSearch = useCallback(() => {
+  const preloadSearch = (): void => {
     if (!preloadedSearch.current) {
       preloadedSearch.current = true;
       preloadLibs([SEARCH_LIB, FILE_INDEX]);
     }
-  }, []);
+  };
 
   useEffect(() => {
     if (
       firstResult?.ref &&
       (!bestMatch || bestMatch !== firstResult?.ref || !activeItem)
     ) {
+      // eslint-disable-next-line react/set-state-in-effect -- Picks the best match after measuring the menu width
       setBestMatch(firstResult.ref);
 
       if (menuRef.current && menuRef.current.clientWidth > MIN_MULTI_LINE) {
@@ -203,6 +227,15 @@ const Search: FC<SearchProps> = ({ toggleSearch }) => {
       setActiveItem("");
     }
   }, [activeItem, bestMatch, firstResult]);
+
+  useEffect(() => {
+    // The select/back buttons and stale results unmount while focused,
+    // dropping focus to body, which would leave Escape and blur-close inoperable
+    if (document.activeElement === document.body) {
+      menuRef.current?.focus(PREVENT_SCROLL);
+    }
+    // eslint-disable-next-line react/exhaustive-effect-dependencies
+  }, [activeItem, results]);
 
   useEffect(() => {
     const updateMenuWidth = (): void =>
@@ -216,14 +249,11 @@ const Search: FC<SearchProps> = ({ toggleSearch }) => {
   }, []);
 
   useEffect(() => {
-    if (results.length === 0) {
-      setSubResults([]);
-      return;
-    }
+    if (results.length === 0) return;
 
     Promise.all(
       results.map(async (result) => {
-        const extension = extname(result.ref);
+        const extension = getExtension(result.ref);
         let pid = "";
 
         if (extension === SHORTCUT_EXTENSION) {
@@ -256,54 +286,148 @@ const Search: FC<SearchProps> = ({ toggleSearch }) => {
     });
   }, [lstat, readFile, results]);
 
+  const changeTab = (tab: TabName): void => {
+    if (inputRef.current) {
+      inputRef.current.value = (
+        tab === "All"
+          ? inputRef.current.value
+          : `${tab}: ${inputRef.current.value}`
+      ).replace(`${activeTab}: `, "");
+      listRef.current?.scrollTo(0, 0);
+    }
+
+    setActiveItem("");
+    setActiveTab(tab);
+  };
+  const closeSearch = (returnFocus = true): void => {
+    closingRef.current = true;
+    toggleSearch(false);
+    if (returnFocus) restoreFocus(returnFocusRef.current, menuRef.current);
+    closingRef.current = false;
+  };
+  const onKeyDown: React.KeyboardEventHandler<HTMLElement> = (event) => {
+    const { ctrlKey, key, shiftKey, target } = event;
+
+    if (isComposingKey(event.nativeEvent)) return;
+
+    // Its own shortcut closes it too, the same as Escape
+    if (
+      key === "Escape" ||
+      (ctrlKey && shiftKey && key.toUpperCase() === "S")
+    ) {
+      haltEvent(event);
+      closeSearch();
+      return;
+    }
+
+    // From the box, only Down needs the results, so typing skips finding them
+    const resultButtons =
+      target === inputRef.current && key !== "ArrowDown"
+        ? []
+        : getResultButtons(menuRef.current);
+    const resultIndex = resultButtons.indexOf(target as HTMLElement);
+
+    if (
+      (target === inputRef.current || target === menuRef.current) &&
+      key === "ArrowDown" &&
+      focusByKey(key, resultButtons)
+    ) {
+      haltEvent(event);
+    } else if (
+      resultIndex === 0 &&
+      (key === "ArrowUp" || key === "ArrowLeft")
+    ) {
+      haltEvent(event);
+      inputRef.current?.focus(PREVENT_SCROLL);
+    } else if (
+      resultIndex !== -1 &&
+      focusByKey(key, resultButtons, { wrap: false })
+    ) {
+      haltEvent(event);
+    } else if (
+      isKeyboardNavigating() &&
+      target !== inputRef.current &&
+      (isPrintableKey(event) || key === "Backspace")
+    ) {
+      // Typing goes back to the search box, as it does in Windows
+      inputRef.current?.focus(PREVENT_SCROLL);
+    }
+  };
+  const visibleTabs = TABS.filter(
+    (tab) =>
+      !(menuWidth < 325 && tab === "Videos") &&
+      !(menuWidth < 260 && tab === "Photos")
+  );
+  // Narrow menus hide some tabs, so then the panel names itself
+  const labelledBy = visibleTabs.includes(activeTab)
+    ? `search-tab-${activeTab}`
+    : undefined;
+  const tabPanel = {
+    "aria-label": labelledBy ? undefined : activeTab,
+    "aria-labelledby": labelledBy,
+    id: "search-results",
+    role: "tabpanel",
+  };
+  const hasTabPanel = !searchTerm || !singleLineView || !activeItem;
+
   return (
     <StyledSearch
       ref={menuRef}
       $singleLine={singleLineView}
+      aria-label="Search"
       id="searchMenu"
-      onBlurCapture={(event) =>
-        maybeCloseTaskbarMenu(
-          event,
-          menuRef.current,
-          toggleSearch,
-          inputRef.current,
-          SEARCH_BUTTON_TITLE,
-          true
-        )
-      }
-      onKeyDown={({ key }) => {
-        if (key === "Escape") toggleSearch(false);
+      onBlurCapture={(event) => {
+        if (!closingRef.current) {
+          maybeCloseTaskbarMenu(
+            event,
+            menuRef.current,
+            toggleSearch,
+            inputRef.current,
+            SEARCH_BUTTON_TITLE,
+            true
+          );
+        }
       }}
+      onKeyDown={onKeyDown}
+      role="dialog"
       {...searchTransition}
       {...FOCUSABLE_ELEMENT}
     >
+      <div className="results-status" role="status">
+        {resultsStatus}
+      </div>
       <div>
         <div className="content" onContextMenu={haltEvent}>
-          <StyledTabs>
-            {TABS.filter(
-              (tab) =>
-                !(menuWidth < 325 && tab === "Videos") &&
-                !(menuWidth < 260 && tab === "Photos")
-            ).map((tab) => (
-              // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
+          <StyledTabs role="tablist">
+            {visibleTabs.map((tab) => (
               <li
                 key={tab}
                 className={tab === activeTab ? "active" : undefined}
-                onClick={() => changeTab(tab)}
-                {...label(
-                  tab === "All"
-                    ? "Find the most relevant results"
-                    : `Find results in ${tab}`
-                )}
+                role="presentation"
               >
-                {tab}
+                <button
+                  aria-selected={tab === activeTab}
+                  id={`search-tab-${tab}`}
+                  onClick={() => changeTab(tab)}
+                  role="tab"
+                  type="button"
+                  {...(hasTabPanel && { "aria-controls": tabPanel.id })}
+                  {...label(
+                    tab === "All"
+                      ? "Find the most relevant results"
+                      : `Find results in ${tab}`,
+                    tab
+                  )}
+                >
+                  {tab}
+                </button>
               </li>
             ))}
           </StyledTabs>
-          <nav>
+          <nav role="presentation">
             <Button
               className="close-button"
-              onClick={() => toggleSearch(false)}
+              onClick={() => closeSearch(isKeyboardNavigating())}
               {...label("Close Search")}
             >
               <CloseIcon />
@@ -313,26 +437,29 @@ const Search: FC<SearchProps> = ({ toggleSearch }) => {
             <StyledSections
               $singleLine={singleLineView}
               className={singleLineView ? "single-line" : undefined}
+              {...tabPanel}
             >
               <section>
                 <figure>
                   <figcaption>Suggested</figcaption>
                   <StyledSuggestions>
                     {SUGGESTED.map((app) => (
-                      // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
-                      <li
-                        key={app}
-                        onClick={() => openApp(app)}
-                        title={directory[app].title}
-                      >
-                        <figure>
-                          <Icon
-                            displaySize={32}
-                            imgSize={32}
-                            src={directory[app].icon}
-                          />
-                          <figcaption>{directory[app].title}</figcaption>
-                        </figure>
+                      <li key={app} title={directory[app].title}>
+                        <button
+                          aria-label={directory[app].title}
+                          onClick={() => openApp(app)}
+                          type="button"
+                        >
+                          <figure>
+                            <Icon
+                              alt=""
+                              displaySize={32}
+                              imgSize={32}
+                              src={directory[app].icon}
+                            />
+                            <figcaption>{directory[app].title}</figcaption>
+                          </figure>
+                        </button>
                       </li>
                     ))}
                   </StyledSuggestions>
@@ -344,26 +471,30 @@ const Search: FC<SearchProps> = ({ toggleSearch }) => {
                     <figcaption>Recent</figcaption>
                     <ol>
                       {recentFiles.map(([file, pid, title], index) => (
-                        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
-                        <li
-                          key={`${file}${pid}`}
-                          onClick={() => {
-                            openApp(pid, { url: file });
-                            if (index !== 0) {
-                              setTimeout(
-                                () => updateRecentFiles(file, pid, title),
-                                TRANSITIONS_IN_SECONDS.TASKBAR_ITEM *
-                                  MILLISECONDS_IN_SECOND
-                              );
-                            }
-                          }}
-                        >
-                          <Icon
-                            displaySize={16}
-                            imgSize={16}
-                            src={directory[pid]?.icon}
-                          />
-                          <h2>{title || basename(file, extname(file))}</h2>
+                        <li key={`${file}${pid}`}>
+                          <button
+                            onClick={() => {
+                              openApp(pid, { url: file });
+                              if (index !== 0) {
+                                setTimeout(
+                                  () => updateRecentFiles(file, pid, title),
+                                  TRANSITIONS_IN_SECONDS.TASKBAR_ITEM *
+                                    MILLISECONDS_IN_SECOND
+                                );
+                              }
+                            }}
+                            type="button"
+                          >
+                            <Icon
+                              alt=""
+                              displaySize={16}
+                              imgSize={16}
+                              src={directory[pid]?.icon}
+                            />
+                            <h2 role="none">
+                              {title || basename(file, extname(file))}
+                            </h2>
+                          </button>
                         </li>
                       ))}
                     </ol>
@@ -382,18 +513,16 @@ const Search: FC<SearchProps> = ({ toggleSearch }) => {
                     ).map(
                       (game) =>
                         directory[game] && (
-                          // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
-                          <li
-                            key={game}
-                            onClick={() => openApp(game)}
-                            title={directory[game].title}
-                          >
-                            <Icon
-                              displaySize={56}
-                              imgSize={96}
-                              src={directory[game].icon}
-                            />
-                            <h4>{directory[game].title}</h4>
+                          <li key={game} title={directory[game].title}>
+                            <button onClick={() => openApp(game)} type="button">
+                              <Icon
+                                alt=""
+                                displaySize={56}
+                                imgSize={96}
+                                src={directory[game].icon}
+                              />
+                              <h4 role="none">{directory[game].title}</h4>
+                            </button>
                           </li>
                         )
                     )}
@@ -422,10 +551,10 @@ const Search: FC<SearchProps> = ({ toggleSearch }) => {
             </StyledSections>
           )}
           {!searchTerm && activeTab !== "All" && (
-            <div className="tab">
+            <div className="tab" {...tabPanel}>
               {METADATA[activeTab].icon}
               <h1>Search {METADATA[activeTab].title.toLowerCase()}</h1>
-              <h3>
+              <h3 aria-level={2}>
                 Start typing to search{" "}
                 {METADATA[activeTab].subtitle ||
                   METADATA[activeTab].title.toLowerCase()}
@@ -435,7 +564,7 @@ const Search: FC<SearchProps> = ({ toggleSearch }) => {
           {searchTerm && (
             <StyledResults>
               {(!singleLineView || !activeItem) && (
-                <div ref={listRef} className="list">
+                <div ref={listRef} className="list" {...tabPanel}>
                   <ResultSection
                     activeItem={activeItem}
                     activeTab={activeTab}
@@ -481,26 +610,31 @@ const Search: FC<SearchProps> = ({ toggleSearch }) => {
         <motion.div className="search" {...inputTransition}>
           <SearchIcon />
           <input
-            ref={focusOnRenderCallback}
+            ref={inputRef}
             onChange={() => {
               const tabAppend = activeTab === "All" ? "" : `${activeTab}: `;
               const value = inputRef.current?.value.startsWith(tabAppend)
                 ? inputRef.current?.value.replace(tabAppend, "")
                 : inputRef.current?.value;
 
+              window.clearTimeout(resultsStatusTimeoutRef.current);
               window.clearTimeout(searchTimeoutRef.current);
               searchTimeoutRef.current = window.setTimeout(
                 () => setSearchTerm(value ?? ""),
                 searchTimeoutRef.current > 0 ? KEYPRESS_DEBOUNCE_MS : 0
               );
             }}
-            onClick={preloadedSearch.current ? undefined : preloadSearch}
-            onKeyDown={({ key }) => {
+            onClick={preloadSearch}
+            onKeyDown={({ key, nativeEvent }) => {
               preloadSearch();
 
-              if (key === "Enter" && firstResult?.ref) {
+              if (
+                key === "Enter" &&
+                firstResult?.ref &&
+                !isComposingKey(nativeEvent)
+              ) {
                 const bestMatchElement = menuRef.current?.querySelector(
-                  ".list li:first-child figure"
+                  ".list li:first-child > button"
                 );
 
                 (bestMatchElement as HTMLElement)?.click();
@@ -511,6 +645,7 @@ const Search: FC<SearchProps> = ({ toggleSearch }) => {
               caretColor: showCaret ? undefined : "transparent",
             }}
             {...SEARCH_INPUT_PROPS}
+            aria-label="Type here to search"
           />
         </motion.div>
       </div>
@@ -518,4 +653,4 @@ const Search: FC<SearchProps> = ({ toggleSearch }) => {
   );
 };
 
-export default memo(Search);
+export default Search;

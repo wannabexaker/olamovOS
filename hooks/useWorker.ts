@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
 
-const useWorker = <T>(
+// The default keeps the generic parseable as TSX, so Next compiles this file
+const useWorker = <T = unknown>(
   workerInit?: () => Worker,
   onMessage?: (message: MessageEvent<T>) => void
-): React.RefObject<Worker | undefined> => {
+): React.RefObject<undefined | Worker> => {
   const worker = useRef<Worker>(undefined);
 
   useEffect(() => {

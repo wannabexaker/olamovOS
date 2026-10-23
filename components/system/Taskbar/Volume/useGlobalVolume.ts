@@ -3,7 +3,7 @@ import {
   patchAudioContextOnce,
   setMasterAudio,
 } from "components/system/Taskbar/Volume/audioContextPatch";
-import { useSession } from "contexts/session";
+import { useAudioMuted, useAudioVolume } from "contexts/session";
 
 const setMediaVolume = (el: HTMLMediaElement, v: number, m: boolean): void => {
   try {
@@ -20,7 +20,8 @@ const applyToAll = (volume: number, muted: boolean): void => {
 };
 
 const useGlobalVolume = (): void => {
-  const { audioMuted, audioVolume } = useSession();
+  const audioMuted = useAudioMuted();
+  const audioVolume = useAudioVolume();
 
   useEffect(() => {
     patchAudioContextOnce();

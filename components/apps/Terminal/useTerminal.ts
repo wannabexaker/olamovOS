@@ -1,13 +1,7 @@
 import { extname } from "path";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type IDisposable, type Terminal } from "xterm";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
-import { PROMPT_CHARACTER, config } from "components/apps/Terminal/config";
+import { config, PROMPT_CHARACTER } from "components/apps/Terminal/config";
 import {
   autoComplete,
   readClipboardToTerminal,
@@ -20,9 +14,9 @@ import {
 import useCommandInterpreter from "components/apps/Terminal/useCommandInterpreter";
 import { type ContainerHookProps } from "components/system/Apps/AppContainer";
 import extensions from "components/system/Files/FileEntry/extensions";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
+import { useFileSystemActions } from "contexts/fileSystem";
+import { useProcess, useProcessesActions } from "contexts/process";
+import { useForegroundId } from "contexts/session";
 import useResizeObserver from "hooks/useResizeObserver";
 import { HOME, PACKAGE_DATA, PREVENT_SCROLL } from "utils/constants";
 import {
@@ -36,6 +30,12 @@ const { alias, license } = PACKAGE_DATA;
 
 export const displayLicense = `${license} License`;
 
+const setHistory = (localEcho: LocalEcho, entries: string[]): void => {
+  const { history } = localEcho;
+
+  history.entries = entries;
+};
+
 const useTerminal = ({
   containerRef,
   id,
@@ -43,20 +43,18 @@ const useTerminal = ({
   setLoading,
   url,
 }: ContainerHookProps): void => {
-  const {
-    url: setUrl,
-    processes: { [id]: { closing = false, libs = [] } = {} },
-  } = useProcesses();
-  const { readdir } = useFileSystem();
+  const { url: setUrl } = useProcessesActions();
+  const { closing = false, libs = [] } = useProcess(id);
+  const { readdir } = useFileSystemActions();
   const [terminal, setTerminal] = useState<Terminal>();
   const [fitAddon, setFitAddon] = useState<FitAddon>();
   const [localEcho, setLocalEcho] = useState<LocalEcho>();
   const cd = useRef((!localEcho && url && !extname(url) ? url : "") || HOME);
-  const [initialCommand, setInitialCommand] = useState("");
-  const [prompted, setPrompted] = useState(false);
+  const initialCommand = useRef("");
+  const prompted = useRef(false);
   const processCommand = useCommandInterpreter(id, cd, terminal, localEcho);
-  const autoFit = useCallback(() => fitAddon?.fit(), [fitAddon]);
-  const { foregroundId } = useSession();
+  const autoFit = (): void => fitAddon?.fit();
+  const foregroundId = useForegroundId();
 
   useEffect(() => {
     if (url) {
@@ -67,9 +65,7 @@ const useTerminal = ({
         const { command: extCommand = "" } = extensions[fileExtension] || {};
 
         if (extCommand) {
-          setInitialCommand(
-            `${extCommand} ${url.includes(" ") ? `"${url}"` : url}`
-          );
+          initialCommand.current = `${extCommand} ${url.includes(" ") ? `"${url}"` : url}`;
         }
       }
 
@@ -79,7 +75,21 @@ const useTerminal = ({
 
   useEffect(() => {
     loadFiles(libs).then(() => {
-      if (window.Terminal) setTerminal(new window.Terminal(config));
+      if (window.Terminal) {
+        const highContrast =
+          window.matchMedia("(forced-colors: active)").matches ||
+          window.matchMedia("(prefers-contrast: more)").matches;
+
+        setTerminal(
+          new window.Terminal({
+            ...config,
+            ...(highContrast && {
+              minimumContrastRatio: 4.5,
+              screenReaderMode: true,
+            }),
+          })
+        );
+      }
     });
   }, [libs]);
 
@@ -111,7 +121,10 @@ const useTerminal = ({
 
         if (textSelection) {
           try {
-            navigator.clipboard?.writeText(textSelection);
+            if (navigator.clipboard) {
+              navigator.clipboard.writeText(textSelection);
+            }
+
             terminal.clearSelection();
           } catch {
             // Ignore failure to write to clipboard
@@ -149,7 +162,7 @@ const useTerminal = ({
     if (terminal && localEcho) {
       terminal.textarea?.setAttribute("enterkeyhint", "send");
       currentOnKey = terminal.onKey(
-        ({ domEvent: { ctrlKey, code } }: OnKeyEvent) => {
+        ({ domEvent: { code, ctrlKey } }: OnKeyEvent) => {
           if (ctrlKey && code === "KeyV") {
             readClipboardToTerminal(localEcho, terminal);
           }
@@ -161,7 +174,7 @@ const useTerminal = ({
   }, [localEcho, terminal]);
 
   useEffect(() => {
-    if (localEcho && terminal && !prompted) {
+    if (localEcho && terminal && !prompted.current) {
       const prompt = (): Promise<void> =>
         localEcho
           .read(`\r\n${cd.current}${PROMPT_CHARACTER}`)
@@ -171,17 +184,17 @@ const useTerminal = ({
       localEcho.println("Olamov Universe");
       localEcho.println("systems. intelligence. experiments.");
 
-      if (initialCommand) {
+      if (initialCommand.current) {
         localEcho.println(
-          `\r\n${cd.current}${PROMPT_CHARACTER}${initialCommand}\r\n`
+          `\r\n${cd.current}${PROMPT_CHARACTER}${initialCommand.current}\r\n`
         );
-        localEcho.history.entries = [initialCommand];
-        processCommand.current(initialCommand).then(prompt);
+        setHistory(localEcho, [initialCommand.current]);
+        processCommand.current(initialCommand.current).then(prompt);
       } else {
         prompt();
       }
 
-      setPrompted(true);
+      prompted.current = true;
       terminal.focus();
       autoFit();
 
@@ -190,19 +203,11 @@ const useTerminal = ({
         autoComplete(files, localEcho);
         containerRef.current
           ?.querySelector(".terminal")
+          // eslint-disable-next-line unicorn/prefer-dom-node-dataset
           ?.setAttribute("data-autocomplete-files", "true");
       });
     }
-  }, [
-    autoFit,
-    containerRef,
-    initialCommand,
-    localEcho,
-    processCommand,
-    prompted,
-    readdir,
-    terminal,
-  ]);
+  }, [autoFit, containerRef, localEcho, processCommand, readdir, terminal]);
 
   useLayoutEffect(() => {
     if (id === foregroundId && !loading) {
@@ -210,7 +215,7 @@ const useTerminal = ({
     }
   }, [foregroundId, id, loading, terminal]);
 
-  useResizeObserver(containerRef.current, autoFit);
+  useResizeObserver(containerRef, autoFit);
 };
 
 export default useTerminal;

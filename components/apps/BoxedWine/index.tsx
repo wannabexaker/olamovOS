@@ -1,18 +1,26 @@
-import { memo } from "react";
 import StyledBoxedWine from "components/apps/BoxedWine/StyledBoxedWine";
 import useBoxedWine from "components/apps/BoxedWine/useBoxedWine";
-import AppContainer from "components/system/Apps/AppContainer";
+import AppContainer, {
+  useAppContainer,
+} from "components/system/Apps/AppContainer";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import { haltEvent } from "utils/functions";
 
-const BoxedWine: FC<ComponentProcessProps> = ({ id }) => (
-  <AppContainer
-    StyledComponent={StyledBoxedWine}
-    id={id}
-    useHook={useBoxedWine}
-  >
-    <canvas id="boxedWineCanvas" onContextMenu={haltEvent} />
-  </AppContainer>
-);
+const BoxedWine: FC<ComponentProcessProps> = ({ id }) => {
+  const containerProps = useAppContainer(id);
 
-export default memo(BoxedWine);
+  useBoxedWine(containerProps);
+
+  return (
+    <AppContainer {...containerProps} StyledComponent={StyledBoxedWine}>
+      <canvas
+        aria-label="BoxedWine"
+        id="boxedWineCanvas"
+        onContextMenu={haltEvent}
+        role="img"
+      />
+    </AppContainer>
+  );
+};
+
+export default BoxedWine;

@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import {
+  DEFAULT_SESSION,
   DESKTOP_SELECTOR,
+  TEST_APP,
   TEST_APP_TITLE_TEXT,
   WINDOW_SELECTOR,
 } from "e2e/constants";
@@ -9,11 +11,13 @@ import {
   clickCloseWindow,
   clickMaximizeWindow,
   clickMinimizeWindow,
+  closePage,
   disableWallpaper,
   doubleClickWindowTitlebar,
   doubleClickWindowTitlebarIcon,
   dragWindowToDesktop,
   fileExplorerEntriesAreVisible,
+  loadApp,
   loadTestApp,
   pressDesktopKeys,
   triggerFullscreenDetection,
@@ -22,8 +26,8 @@ import {
   windowIsMaximized,
   windowIsOpaque,
   windowIsTransparent,
-  windowTitlebarTextIsVisible,
   windowsAreVisible,
+  windowTitlebarTextIsVisible,
 } from "e2e/functions";
 
 test.beforeEach(captureConsoleLogs());
@@ -32,6 +36,7 @@ test.beforeEach(loadTestApp);
 test.beforeEach(windowsAreVisible);
 test.beforeEach(windowAnimationIsFinished);
 test.beforeEach(fileExplorerEntriesAreVisible);
+test.afterEach(closePage);
 
 test("has title", async ({ page }) =>
   windowTitlebarTextIsVisible(TEST_APP_TITLE_TEXT, { page }));
@@ -51,6 +56,43 @@ test.describe("can maximize", () => {
   test("via double click titlebar", async ({ page }) => {
     await doubleClickWindowTitlebar({ page });
     await windowIsMaximized({ page });
+  });
+
+  test("stays on screen when the viewport shrinks", async ({ page }) => {
+    const windowElement = page.locator(WINDOW_SELECTOR);
+    const { x = 0, y = 0 } = (await windowElement.boundingBox()) || {};
+
+    await clickMaximizeWindow({ page });
+    await windowIsMaximized({ page });
+
+    // Smaller than the restore position, which gets clamped while maximized
+    await page.setViewportSize({ height: Math.floor(y), width: Math.floor(x) });
+
+    await windowIsMaximized({ page });
+    expect(await windowElement.boundingBox()).toMatchObject({ x: 0, y: 0 });
+  });
+
+  test("opens maximized when larger than the viewport", async ({ page }) => {
+    await page.setViewportSize({ height: 300, width: 400 });
+    await page.reload();
+
+    await windowsAreVisible({ page });
+    await windowIsMaximized({ page });
+  });
+
+  test("opens maximized from session", async ({ browser }) => {
+    // Fresh page, as the loaded one has already persisted its own session
+    const page = await browser.newPage();
+
+    await disableWallpaper({ page });
+    await loadApp(
+      { app: TEST_APP },
+      { ...DEFAULT_SESSION, windowStates: { [TEST_APP]: { maximized: true } } }
+    )({ page });
+
+    await windowsAreVisible({ page });
+    await windowIsMaximized({ page });
+    await page.close();
   });
 });
 
@@ -99,10 +141,10 @@ test("can drag", async ({ page }) => {
 test("can resize", async ({ page }) => {
   const windowElement = page.locator(WINDOW_SELECTOR);
   const {
+    height: initialHeight = 0,
+    width: initialWidth = 0,
     x = 0,
     y = 0,
-    width: initialWidth = 0,
-    height: initialHeight = 0,
   } = (await windowElement.boundingBox()) || {};
   const RESIZE_OFFSET = 25;
 
@@ -110,7 +152,7 @@ test("can resize", async ({ page }) => {
   await page.mouse.down({ button: "left" });
   await page.mouse.move(x + RESIZE_OFFSET, y + RESIZE_OFFSET);
 
-  const { width: finalWidth = 0, height: finalHeight = 0 } =
+  const { height: finalHeight = 0, width: finalWidth = 0 } =
     (await windowElement.boundingBox()) || {};
 
   expect(finalWidth).toEqual(initialWidth - RESIZE_OFFSET);

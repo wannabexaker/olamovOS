@@ -1,22 +1,15 @@
 import { join } from "path";
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTheme } from "styled-components";
-import { type FileManagerViewNames } from "components/system/Files/Views";
 import StyledStatusBar from "components/system/Files/FileManager/StyledStatusBar";
 import { type FileDrop } from "components/system/Files/FileManager/useFileDrop";
-import { useFileSystem } from "contexts/fileSystem";
-import useResizeObserver from "hooks/useResizeObserver";
-import { getFormattedSize, haltEvent, label } from "utils/functions";
+import { type FileManagerViewNames } from "components/system/Files/Views";
+import { useFileSystemActions } from "contexts/fileSystem";
 import { UNKNOWN_SIZE } from "contexts/fileSystem/core";
-import Icon from "styles/common/Icon";
+import useResizeObserver from "hooks/useResizeObserver";
 import Button from "styles/common/Button";
+import Icon from "styles/common/Icon";
+import { getFormattedSize, haltEvent, label } from "utils/functions";
 
 type StatusBarProps = {
   count: number;
@@ -37,15 +30,12 @@ const StatusBar: FC<StatusBarProps> = ({
   setView,
   view,
 }) => {
-  const { exists, lstat, stat } = useFileSystem();
+  const { exists, lstat, stat } = useFileSystemActions();
   const [selectedSize, setSelectedSize] = useState(UNKNOWN_SIZE);
   const [showSelected, setShowSelected] = useState(false);
   const { sizes } = useTheme();
-  const updateShowSelected = useCallback(
-    (width: number): void =>
-      setShowSelected(width > sizes.fileExplorer.minimumStatusBarWidth),
-    [sizes.fileExplorer.minimumStatusBarWidth]
-  );
+  const updateShowSelected = (width: number): void =>
+    setShowSelected(width > sizes.fileExplorer.minimumStatusBarWidth);
   const statusBarRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -91,12 +81,8 @@ const StatusBar: FC<StatusBarProps> = ({
     }
   }, [updateShowSelected]);
 
-  useResizeObserver(
-    statusBarRef.current,
-    useCallback<ResizeObserverCallback>(
-      ([{ contentRect: { width = 0 } = {} }]) => updateShowSelected(width),
-      [updateShowSelected]
-    )
+  useResizeObserver(statusBarRef, ([{ contentRect: { width = 0 } = {} }]) =>
+    updateShowSelected(width)
   );
 
   return (
@@ -105,23 +91,29 @@ const StatusBar: FC<StatusBarProps> = ({
       onContextMenuCapture={haltEvent}
       {...fileDrop}
     >
-      <div {...label("Total item count")}>
+      <div role="group" {...label("Total item count")}>
         {count} item{count === 1 ? "" : "s"}
       </div>
       {showSelected && selected.length > 0 && (
-        <div className="selected" {...label("Selected item count and size")}>
+        <div
+          className="selected"
+          role="group"
+          {...label("Selected item count and size")}
+        >
           {selected.length} item{selected.length === 1 ? "" : "s"} selected
           {selectedSize !== UNKNOWN_SIZE && selectedSize !== UNCALCULATED_SIZE
             ? `\u00A0\u00A0${getFormattedSize(selectedSize)}`
             : ""}
         </div>
       )}
-      <nav className="views">
+      <nav className="views" role="presentation">
         <Button
+          aria-pressed={view === "details"}
           className={view === "details" ? "active" : undefined}
           onClick={() => setView("details")}
           {...label(
-            "Displays information about each item\nin the window.  (Ctrl+Shift+6)"
+            "Displays information about each item\nin the window.  (Ctrl+Shift+6)",
+            "Details view"
           )}
         >
           <Icon
@@ -131,10 +123,12 @@ const StatusBar: FC<StatusBarProps> = ({
           />
         </Button>
         <Button
+          aria-pressed={view === "icon"}
           className={view === "icon" ? "active" : undefined}
           onClick={() => setView("icon")}
           {...label(
-            "Display items by using medium\nthumbnails.  (Ctrl+Shift+3)"
+            "Display items by using medium\nthumbnails.  (Ctrl+Shift+3)",
+            "Medium icons view"
           )}
         >
           <Icon
@@ -148,4 +142,4 @@ const StatusBar: FC<StatusBarProps> = ({
   );
 };
 
-export default memo(StatusBar);
+export default StatusBar;

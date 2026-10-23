@@ -1,7 +1,11 @@
-import { memo, useCallback, useEffect, useRef } from "react";
-import { StyledVolumePanel } from "components/system/Taskbar/Volume/StyledVolume";
+import { useCallback, useEffect, useRef } from "react";
 import useTaskbarItemTransition from "components/system/Taskbar/useTaskbarItemTransition";
-import { useSession } from "contexts/session";
+import { StyledVolumePanel } from "components/system/Taskbar/Volume/StyledVolume";
+import {
+  useAudioMuted,
+  useAudioVolume,
+  useSessionActions,
+} from "contexts/session";
 import { FOCUSABLE_ELEMENT, PREVENT_SCROLL } from "utils/constants";
 import { haltEvent } from "utils/functions";
 
@@ -18,8 +22,9 @@ const VolumePanel: FC<VolumePanelProps> = ({
   hasAI,
   toggleVolume,
 }) => {
-  const { audioMuted, audioVolume, setAudioMuted, setAudioVolume } =
-    useSession();
+  const audioMuted = useAudioMuted();
+  const audioVolume = useAudioVolume();
+  const { setAudioMuted, setAudioVolume } = useSessionActions();
   const panelRef = useRef<HTMLElement>(null);
   const volumeTransition = useTaskbarItemTransition(PANEL_HEIGHT, false);
 
@@ -96,4 +101,4 @@ const VolumePanel: FC<VolumePanelProps> = ({
   );
 };
 
-export default memo(VolumePanel);
+export default VolumePanel;

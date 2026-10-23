@@ -1,6 +1,6 @@
 import routesData from "utils/seoRoutes.json";
 
-export type PublicRouteKind = "app" | "game" | "gallery" | "home";
+export type PublicRouteKind = "app" | "gallery" | "game" | "home";
 
 export type PublicRoute = {
   app?: string;

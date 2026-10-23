@@ -1,11 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import useCloseOnEscape from "components/system/Dialogs/useCloseOnEscape";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
-import StyledButton from "components/system/Dialogs/StyledButton";
 import StyledShutdown from "components/system/Dialogs/Shutdown/StyledShutdown";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
+import StyledButton from "components/system/Dialogs/StyledButton";
+import useCloseOnEscape from "components/system/Dialogs/useCloseOnEscape";
+import { useRootFs } from "contexts/fileSystem";
+import { resetStorageAndReload } from "contexts/fileSystem/useAsyncFs";
+import { useProcessesActions } from "contexts/process";
+import { useSessionActions } from "contexts/session";
 import Icon from "styles/common/Icon";
 import { PREVENT_SCROLL } from "utils/constants";
 import { haltEvent } from "utils/functions";
@@ -36,9 +37,9 @@ const SHUTDOWN_OPTIONS = [
 type ShutdownAction = (typeof SHUTDOWN_OPTIONS)[number]["value"];
 
 const Shutdown: FC<ComponentProcessProps> = ({ id }) => {
-  const { rootFs } = useFileSystem();
-  const { closeWithTransition, open } = useProcesses();
-  const { setHaltSession } = useSession();
+  const rootFs = useRootFs();
+  const { closeWithTransition, open } = useProcessesActions();
+  const { setHaltSession } = useSessionActions();
   const shutdownRef = useRef<HTMLDivElement>(null);
   const selectRef = useRef<HTMLSelectElement>(null);
   const [action, setAction] = useState<ShutdownAction>("shutdown");
@@ -54,9 +55,7 @@ const Shutdown: FC<ComponentProcessProps> = ({ id }) => {
   const shutdown = useCallback((): void => {
     setHaltSession(true);
 
-    import("contexts/fileSystem/functions").then(({ resetStorage }) =>
-      resetStorage(rootFs).finally(() => window.location.reload())
-    );
+    resetStorageAndReload(rootFs);
   }, [rootFs, setHaltSession]);
   const suspend = useCallback((): void => {
     closeWithTransition(id);
@@ -117,4 +116,4 @@ const Shutdown: FC<ComponentProcessProps> = ({ id }) => {
   );
 };
 
-export default memo(Shutdown);
+export default Shutdown;

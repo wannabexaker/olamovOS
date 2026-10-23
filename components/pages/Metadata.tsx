@@ -1,8 +1,7 @@
-import { memo, useMemo } from "react";
 import Head from "next/head";
+import { useCursor } from "components/pages/hooks/useCursor";
 import { useDynamicSeo } from "components/pages/hooks/useDynamicSeo";
 import { useFaviconAndTitle } from "components/pages/hooks/useFaviconAndTitle";
-import { useCursor } from "components/pages/hooks/useCursor";
 import desktopIcons from "public/.index/desktopIcons.json";
 import { HIGH_PRIORITY_ELEMENT, PACKAGE_DATA } from "utils/constants";
 import {
@@ -25,37 +24,37 @@ const SEO_KEYWORDS = [
   "systems intelligence experiments",
 ].join(", ");
 
-const Metadata: FC = () => {
-  const { title, Favicon } = useFaviconAndTitle();
-  const { canonical, robots } = useDynamicSeo();
-  const CustomCursor = useCursor();
-  const PreloadIcons = useMemo(
-    () =>
-      desktopIcons.map((icon) => {
-        const isSubIcon = icon.includes("/16x16/");
-        const dynamicIcon = !isSubIcon && isDynamicIcon(icon);
-        const extension = getExtension(icon);
+const PreloadIcons: FC = () => (
+  <>
+    {desktopIcons.map((icon) => {
+      const isSubIcon = icon.includes("/16x16/");
+      const dynamicIcon = !isSubIcon && isDynamicIcon(icon);
+      const extension = getExtension(icon);
 
-        return (
-          <link
-            key={icon}
-            as="image"
-            href={dynamicIcon || isSubIcon ? undefined : icon}
-            imageSrcSet={
-              dynamicIcon
-                ? imageSrcs(icon, 48, extension)
-                : isSubIcon
-                  ? imageSrcs(icon.replace("16x16/", ""), 16, extension)
-                  : undefined
-            }
-            rel="preload"
-            type={getMimeType(extension)}
-            {...HIGH_PRIORITY_ELEMENT}
-          />
-        );
-      }),
-    []
-  );
+      return (
+        <link
+          key={icon}
+          as="image"
+          href={dynamicIcon || isSubIcon ? undefined : icon}
+          imageSrcSet={
+            dynamicIcon
+              ? imageSrcs(icon, 48, extension)
+              : isSubIcon
+                ? imageSrcs(icon.replace("16x16/", ""), 16, extension)
+                : undefined
+          }
+          rel="preload"
+          type={getMimeType(extension)}
+          {...HIGH_PRIORITY_ELEMENT}
+        />
+      );
+    })}
+  </>
+);
+
+const Metadata: FC = () => {
+  const { Favicon, title } = useFaviconAndTitle();
+  const { canonical, robots } = useDynamicSeo();
 
   return (
     <Head>
@@ -102,10 +101,10 @@ const Metadata: FC = () => {
         title={`RSS Feed for ${alias}`}
         type="application/rss+xml"
       />
-      {PreloadIcons}
-      {CustomCursor}
+      <PreloadIcons />
+      {useCursor()}
     </Head>
   );
 };
 
-export default memo(Metadata);
+export default Metadata;

@@ -1,15 +1,16 @@
 import { basename, join } from "path";
-import { useCallback, useEffect, useState } from "react";
-import { type DosInstance } from "emulators-ui/dist/types/js-dos";
 import { type CommandInterface } from "emulators";
+import { type DosInstance } from "emulators-ui/dist/types/js-dos";
+import { useEffect, useState } from "react";
 import {
   globals,
   saveExtension,
   zipConfigFiles,
 } from "components/apps/JSDOS/config";
 import useTitle from "components/system/Window/useTitle";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
+import { useFileSystemActions } from "contexts/fileSystem";
+import { hasProcess, useProcess, useProcessesActions } from "contexts/process";
+import { useSnapshots } from "hooks/useSnapshots";
 import { SAVE_PATH, TRANSITIONS_IN_MILLISECONDS } from "utils/constants";
 import {
   bufferToUrl,
@@ -18,7 +19,7 @@ import {
   imgDataToBuffer,
 } from "utils/functions";
 import { cleanUpGlobals } from "utils/globals";
-import { useSnapshots } from "hooks/useSnapshots";
+import { loadZipFunctions } from "utils/loaders";
 
 const addJsDosConfig = async (
   buffer: Buffer,
@@ -45,47 +46,44 @@ const useDosCI = (
   dosInstance?: DosInstance
 ): CommandInterface | undefined => {
   const { appendFileToTitle } = useTitle(id);
-  const { exists, readFile } = useFileSystem();
-  const {
-    argument,
-    linkElement,
-    processes: { [id]: process },
-  } = useProcesses();
-  const { closing } = process || {};
+  const { exists, readFile } = useFileSystemActions();
+  const { argument, linkElement } = useProcessesActions();
+  const process = useProcess(id);
+  const { closing } = process;
   const [dosCI, setDosCI] = useState<
     Record<string, CommandInterface | undefined>
   >({});
   const { createSnapshot } = useSnapshots();
-  const closeBundle = useCallback(
-    async (bundleUrl: string, screenshot?: Buffer, closeInstance = false) => {
-      if (dosCI[bundleUrl]) {
-        await createSnapshot(
-          `${basename(bundleUrl)}${saveExtension}`,
-          Buffer.from(((await dosCI[bundleUrl].persist()) as Uint8Array) || []),
-          screenshot
-        );
-      }
+  const closeBundle = async (
+    bundleUrl: string,
+    screenshot?: Buffer,
+    closeInstance = false
+  ): Promise<void> => {
+    if (dosCI[bundleUrl]) {
+      await createSnapshot(
+        `${basename(bundleUrl)}${saveExtension}`,
+        Buffer.from(((await dosCI[bundleUrl].persist()) as Uint8Array) || []),
+        screenshot
+      );
+    }
 
-      if (closeInstance) {
-        try {
-          await dosInstance?.stop();
-          await dosCI[bundleUrl]?.exit();
-        } catch {
-          // Ignore errors during closing
-        }
+    if (closeInstance) {
+      try {
+        if (dosInstance) await dosInstance.stop();
+        if (dosCI[bundleUrl]) await dosCI[bundleUrl].exit();
+      } catch {
+        // Ignore errors during closing
       }
-    },
-    [createSnapshot, dosCI, dosInstance]
-  );
-  const takeScreenshot = useCallback(
-    async (fileUrl: string): Promise<Buffer | undefined> => {
-      const imageData = await dosCI[fileUrl]?.screenshot();
+    }
+  };
+  const takeScreenshot = async (
+    fileUrl: string
+  ): Promise<Buffer | undefined> => {
+    const imageData = await dosCI[fileUrl]?.screenshot();
 
-      return imageData ? imgDataToBuffer(imageData) : undefined;
-    },
-    [dosCI]
-  );
-  const loadBundle = useCallback(async () => {
+    return imageData ? imgDataToBuffer(imageData) : undefined;
+  };
+  const loadBundle = async (): Promise<void> => {
     const [currentUrl] = Object.keys(dosCI);
 
     if (typeof currentUrl === "string") {
@@ -95,11 +93,14 @@ const useDosCI = (
 
     const [urlBuffer, { zipAsync }] = await Promise.all([
       url ? readFile(url) : Promise.resolve(Buffer.from("")),
-      import("utils/zipFunctions"),
+      loadZipFunctions(),
     ]);
     const extension = getExtension(url);
-    const zippedPayload = async (buffer: Buffer): Promise<Buffer> =>
-      Buffer.from(await zipAsync({ [basename(url)]: buffer }));
+    const zippedPayload = async (buffer: Buffer): Promise<Buffer> => {
+      const fileName = basename(url);
+
+      return Buffer.from(await zipAsync({ [fileName]: buffer }));
+    };
     const zipBufferToUrl = async (buffer: Buffer): Promise<string> =>
       bufferToUrl(await addJsDosConfig(buffer, readFile));
     const zipBuffer =
@@ -126,6 +127,8 @@ const useDosCI = (
       const canvas = containerRef.current?.querySelector("canvas");
 
       if (canvas instanceof HTMLCanvasElement) {
+        canvas.setAttribute("role", "img");
+        canvas.setAttribute("aria-label", "Screen");
         linkElement(id, "peekElement", canvas);
         setDosCI({ [url]: ci });
         appendFileToTitle(basename(url));
@@ -142,23 +145,11 @@ const useDosCI = (
         cleanUpGlobals(globals);
       }
     }
-  }, [
-    appendFileToTitle,
-    argument,
-    closeBundle,
-    containerRef,
-    dosCI,
-    dosInstance,
-    exists,
-    id,
-    linkElement,
-    readFile,
-    takeScreenshot,
-    url,
-  ]);
+  };
 
   useEffect(() => {
-    if (process && !closing && dosInstance && !(url in dosCI)) {
+    if (hasProcess(process) && !closing && dosInstance && !(url in dosCI)) {
+      // eslint-disable-next-line react/set-state-in-effect -- False positive: state is only set after an await
       loadBundle();
     }
 

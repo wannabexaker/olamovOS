@@ -1,36 +1,33 @@
 import { basename, dirname } from "path";
-import { memo, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { getSaveFileInfo } from "components/apps/MonacoEditor/functions";
 import {
   ErrorIcon,
   InfoIcon,
   SaveIcon,
   WarningIcon,
 } from "components/apps/MonacoEditor/Icons";
-import StyledNotifications from "components/apps/MonacoEditor/StyledNotifications";
-import StyledStatusBar from "components/apps/MonacoEditor/StyledStatusBar";
-import { getSaveFileInfo } from "components/apps/MonacoEditor/functions";
 import {
-  type PrettierError,
   isPrettyLanguage,
+  type PrettierError,
   prettyPrint,
 } from "components/apps/MonacoEditor/language";
+import StyledNotifications from "components/apps/MonacoEditor/StyledNotifications";
+import StyledStatusBar from "components/apps/MonacoEditor/StyledStatusBar";
 import { type Model } from "components/apps/MonacoEditor/types";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import useTitle from "components/system/Window/useTitle";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
+import { useFileSystemActions } from "contexts/fileSystem";
+import { useProcess } from "contexts/process";
 import Button from "styles/common/Button";
-import { haltEvent, label } from "utils/functions";
 import { MILLISECONDS_IN_SECOND } from "utils/constants";
+import { haltEvent, label } from "utils/functions";
 
-type NotificationType = "error" | "warning" | "info";
+type NotificationType = "error" | "info" | "warning";
 
 const StatusBar: FC<ComponentProcessProps> = ({ id }) => {
-  const {
-    processes: { [id]: process },
-  } = useProcesses();
-  const { editor, url } = process || {};
-  const { updateFolder, writeFile } = useFileSystem();
+  const { editor, url } = useProcess(id);
+  const { updateFolder, writeFile } = useFileSystemActions();
   const { prependFileToTitle } = useTitle(id);
   const [language, setLanguage] = useState("");
   const [position, setPosition] = useState("Ln 1, Col 1");
@@ -88,7 +85,7 @@ const StatusBar: FC<ComponentProcessProps> = ({ id }) => {
           window.monaco?.languages
             .getLanguages()
             .reduce(
-              (alias, { id: languageId, aliases }) =>
+              (alias, { aliases, id: languageId }) =>
                 languageId === modelLanguage ? aliases?.[0] || alias : alias,
               modelLanguage
             )
@@ -135,7 +132,7 @@ const StatusBar: FC<ComponentProcessProps> = ({ id }) => {
                   className="pretty"
                   onClick={async () => {
                     try {
-                      editor?.setValue(
+                      editor.setValue(
                         await prettyPrint(language, editor.getValue())
                       );
 
@@ -162,13 +159,18 @@ const StatusBar: FC<ComponentProcessProps> = ({ id }) => {
                 <Button
                   onClick={() => {
                     try {
-                      editor?.focus();
-                      editor?.getAction("editor.action.gotoLine")?.run();
+                      editor.focus();
+
+                      const goToLine = editor.getAction(
+                        "editor.action.gotoLine"
+                      );
+
+                      if (goToLine) goToLine.run();
                     } catch {
                       // Ignore focus issues
                     }
                   }}
-                  {...label("Go to Line/Column")}
+                  title="Go to Line/Column"
                 >
                   {position}
                 </Button>
@@ -176,7 +178,7 @@ const StatusBar: FC<ComponentProcessProps> = ({ id }) => {
             )}
             {language !== "" && <li>{language}</li>}
           </ol>
-          <StyledNotifications>
+          <StyledNotifications aria-live="polite">
             {notifications.map(({ message, type }) => (
               <li key={`${type} ${message}`} className="notification">
                 <figure>
@@ -194,4 +196,4 @@ const StatusBar: FC<ComponentProcessProps> = ({ id }) => {
   );
 };
 
-export default memo(StatusBar);
+export default StatusBar;

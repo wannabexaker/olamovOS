@@ -45,11 +45,9 @@ export const DEFAULT_MAPPED_NAME = "Share";
 
 export const FOCUSABLE_ELEMENT = { tabIndex: -1 };
 
-export const DIV_BUTTON_PROPS = {
-  as: "div",
-  role: "button",
-  ...FOCUSABLE_ELEMENT,
-};
+// WebKit only mouse-focuses elements carrying an explicit tabindex, so any
+// button whose popup closes on blur needs one to keep click-to-focus uniform
+export const CLICK_FOCUSABLE_ELEMENT = { tabIndex: 0 };
 
 export const FS_HANDLES = "FileSystemAccessHandles";
 
@@ -72,6 +70,9 @@ export const ICON_GIF_SECONDS = 2;
 export const ICON_GIF_FPS = 24;
 
 export const PEEK_MAX_WIDTH = 200;
+
+// Windows' default mouse hover time, which taskbar thumbnails wait for
+export const PEEK_DELAY_MS = 400;
 
 export const LIST_VIEW_ANIMATION = {
   animate: { opacity: 1 },
@@ -165,6 +166,8 @@ export const EDITABLE_IMAGE_FILE_EXTENSIONS = new Set([
 
 export const MENU_SEPERATOR = { seperator: true };
 
+export const SYSTEM_MENU = "System";
+
 export const MILLISECONDS_IN_SECOND = 1000;
 
 export const MILLISECONDS_IN_MINUTE = 60000;
@@ -221,6 +224,8 @@ export const SYSTEM_PATHS = new Set([
 export const DESKTOP_PATH = `${HOME}/Desktop`;
 
 export const START_MENU_PATH = `${HOME}/Start Menu`;
+
+export const AI_PROMPT_EVENT = "aiprompt";
 
 export const AI_TITLE = "Talos";
 
@@ -379,7 +384,8 @@ export const PACKAGE_DATA = {
   author: {
     email: "systems@olamov.local",
     name: "Olamov Systems",
-    npub: "",
+    // Pinned first in Messenger chats (upstream treats author.npub as a global contact)
+    npub: "npub1mwms32r8dtu580m88xx2u44w7c2kyknj39zfzp9dknny6rqq4zrsg32gpg",
     url: "https://olamov.com",
   },
   description:

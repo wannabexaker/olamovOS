@@ -3,10 +3,10 @@ import { useCallback, useEffect, useRef } from "react";
 import { type ContainerHookProps } from "components/system/Apps/AppContainer";
 import { patchAudioContextForWindow } from "components/system/Taskbar/Volume/audioContextPatch";
 import useTitle from "components/system/Window/useTitle";
-import { useProcesses } from "contexts/process";
-import { useFileSystem } from "contexts/fileSystem";
-import { bufferToUrl, loadFiles } from "utils/functions";
+import { useFileSystemActions } from "contexts/fileSystem";
+import { useProcess, useProcessesActions } from "contexts/process";
 import useIsolatedContentWindow from "hooks/useIsolatedContentWindow";
+import { bufferToUrl, loadFiles } from "utils/functions";
 
 // Commodore 64 isn't part of the locally hosted EmulatorJs build, so this app
 // loads EmulatorJS (with the VICE core) from the CDN. It reuses daedalOS's
@@ -36,9 +36,9 @@ const useCommodore64 = ({
   setLoading,
   url,
 }: ContainerHookProps): void => {
-  const { readFile } = useFileSystem();
-  const { linkElement, processes: { [id]: { libs = [] } = {} } = {} } =
-    useProcesses();
+  const { readFile } = useFileSystemActions();
+  const { linkElement } = useProcessesActions();
+  const { libs = [] } = useProcess(id);
   const { prependFileToTitle } = useTitle(id);
   const getContentWindow = useIsolatedContentWindow(id, containerRef);
   const loadedUrl = useRef<string>(undefined);

@@ -1,11 +1,11 @@
-import { memo, useState } from "react";
+import { useState } from "react";
 import StyledExternalApp from "components/apps/ExternalApp/StyledExternalApp";
 import { getProjectByAppId } from "components/apps/MyProjects/projects";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import StyledLoading from "components/system/Apps/StyledLoading";
 
 declare module "react" {
-  interface IframeHTMLAttributes<T> extends React.HTMLAttributes<T> {
+  interface IframeHTMLAttributes<T> extends HTMLAttributes<T> {
     credentialless?: "credentialless";
   }
 }
@@ -41,4 +41,4 @@ const ExternalApp: FC<ComponentProcessProps> = ({ id }) => {
   );
 };
 
-export default memo(ExternalApp);
+export default ExternalApp;

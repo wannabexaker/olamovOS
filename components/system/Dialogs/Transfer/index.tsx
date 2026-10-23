@@ -1,6 +1,5 @@
 import { basename, dirname } from "path";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import useCloseOnEscape from "components/system/Dialogs/useCloseOnEscape";
+import { useEffect, useRef, useState } from "react";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import StyledButton from "components/system/Dialogs/StyledButton";
 import StyledTransfer from "components/system/Dialogs/Transfer/StyledTransfer";
@@ -9,8 +8,9 @@ import {
   type ObjectReaders,
   type Operation,
 } from "components/system/Dialogs/Transfer/useTransferDialog";
-import { useProcesses } from "contexts/process";
-import { ONE_TIME_PASSIVE_EVENT } from "utils/constants";
+import useCloseOnEscape from "components/system/Dialogs/useCloseOnEscape";
+import { hasProcess, useProcess, useProcessesActions } from "contexts/process";
+import { ONE_TIME_PASSIVE_EVENT, PREVENT_SCROLL } from "utils/constants";
 import { haltEvent } from "utils/functions";
 
 const MAX_TITLE_LENGTH = 37;
@@ -20,97 +20,95 @@ const isFileReaders = (
 ): readers is FileReaders => Array.isArray(readers?.[0]);
 
 const Transfer: FC<ComponentProcessProps> = ({ id }) => {
-  const {
-    argument,
-    closeWithTransition,
-    processes: { [id]: process } = {},
-    title,
-  } = useProcesses();
-  const { closing, fileReaders, operation: baseOperation, url } = process || {};
+  // Process ids can contain paths with spaces, which are invalid in id
+  // attributes and split aria-labelledby's IDREF list
+  const titleId = `transfer-title-${id}`.replace(/\s/g, "_");
+  const { argument, closeWithTransition, title } = useProcessesActions();
+  const process = useProcess(id);
+  const { closing, fileReaders, operation: baseOperation, url } = process;
   const [currentTransfer, setCurrentTransfer] = useState<[string, File]>();
   const [cd = "", { name = "" } = {}] = currentTransfer || [];
   const [progress, setProgress] = useState<number>(0);
-  const currentOperation = useRef<Operation>(undefined);
-  const actionName = useMemo(() => {
-    if (closing || !process) return currentOperation.current;
+  const { operation: objectOperation } =
+    (fileReaders as ObjectReaders)?.[0] || {};
+  const liveOperation: Operation | undefined =
+    closing || !hasProcess(process)
+      ? undefined
+      : objectOperation ||
+        (url && !fileReaders ? baseOperation || "Extracting" : "Copying");
+  // Keeps the last operation shown while the dialog closes
+  const [lastOperation, setLastOperation] = useState(liveOperation);
 
-    let operation: Operation = "Copying";
-    const { operation: objectOperation } =
-      (fileReaders as ObjectReaders)?.[0] || {};
+  if (liveOperation && liveOperation !== lastOperation) {
+    setLastOperation(liveOperation);
+  }
 
-    if (objectOperation) operation = objectOperation;
-    else if (url && !fileReaders) operation = baseOperation || "Extracting";
-
-    currentOperation.current = operation;
-
-    return operation;
-  }, [baseOperation, closing, fileReaders, process, url]);
+  const actionName = liveOperation || lastOperation;
   const processing = useRef(false);
-  const completeTransfer = useCallback(() => {
+  const completeTransfer = (): void => {
     processing.current = false;
     closeWithTransition(id);
-  }, [closeWithTransition, id]);
-  const processObjectReader = useCallback(
-    ([reader, ...remainingReaders]: ObjectReaders) => {
-      const isComplete = remainingReaders.length === 0;
+  };
+  const processObjectReader = (readers: ObjectReaders): void => {
+    Promise.allSettled(
+      readers.map((reader, index) =>
+        reader.read().then(() => {
+          setProgress((currentProgress) => currentProgress + 1);
 
-      reader.read().then(() => {
-        setProgress((currentProgress) => currentProgress + 1);
+          const nextReader = readers[index + 1];
 
-        if (isComplete) {
-          reader.done?.();
-          completeTransfer();
-        } else {
-          const [{ directory, name: nextName }] = remainingReaders;
-
-          setCurrentTransfer([directory, { name: nextName } as File]);
-        }
-      });
-
-      if (!isComplete) processObjectReader(remainingReaders);
-    },
-    [completeTransfer]
-  );
-  const processFileReader = useCallback(
-    ([[file, directory, reader], ...remainingReaders]: FileReaders) => {
-      let fileProgress = 0;
-
-      setCurrentTransfer([directory, file]);
-
-      reader.addEventListener(
-        "progress",
-        ({ loaded = 0 }) => {
-          const progressLoaded = loaded - fileProgress;
-
-          setProgress((currentProgress) => currentProgress + progressLoaded);
-          fileProgress = loaded;
-        },
-        { passive: true }
-      );
-      reader.addEventListener(
-        "loadend",
-        () => {
-          if (remainingReaders.length > 0) {
-            processFileReader(remainingReaders);
-          } else {
-            completeTransfer();
+          if (nextReader) {
+            setCurrentTransfer([
+              nextReader.directory,
+              { name: nextReader.name } as File,
+            ]);
           }
-        },
-        ONE_TIME_PASSIVE_EVENT
-      );
-      // eslint-disable-next-line unicorn/prefer-blob-reading-methods
-      reader.readAsArrayBuffer(file);
-    },
-    [completeTransfer]
-  );
-  const totalTransferSize = useMemo(
-    () =>
-      isFileReaders(fileReaders)
-        ? fileReaders.reduce((acc, [{ size = 0 }]) => acc + size, 0)
-        : fileReaders?.length || Number.POSITIVE_INFINITY,
-    [fileReaders]
-  );
+        })
+      )
+    ).then(() => {
+      readers[readers.length - 1].done?.();
+      completeTransfer();
+    });
+  };
+  const processFileReader = ([
+    [file, directory, reader],
+    ...remainingReaders
+  ]: FileReaders): void => {
+    let fileProgress = 0;
+
+    setCurrentTransfer([directory, file]);
+
+    reader.addEventListener(
+      "progress",
+      ({ loaded = 0 }) => {
+        const progressLoaded = loaded - fileProgress;
+
+        setProgress((currentProgress) => currentProgress + progressLoaded);
+        fileProgress = loaded;
+      },
+      { passive: true }
+    );
+    reader.addEventListener(
+      "loadend",
+      () => {
+        if (remainingReaders.length > 0) {
+          processFileReader(remainingReaders);
+        } else {
+          completeTransfer();
+        }
+      },
+      ONE_TIME_PASSIVE_EVENT
+    );
+    // eslint-disable-next-line unicorn/prefer-blob-reading-methods
+    reader.readAsArrayBuffer(file);
+  };
+  const totalTransferSize = isFileReaders(fileReaders)
+    ? fileReaders.reduce((acc, [{ size = 0 }]) => acc + size, 0)
+    : fileReaders?.length || Number.POSITIVE_INFINITY;
   const closeOnEscape = useCloseOnEscape(id);
+  const transferRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => transferRef.current?.focus(PREVENT_SCROLL), []);
 
   useEffect(() => {
     if (!processing.current) {
@@ -123,6 +121,7 @@ const Transfer: FC<ComponentProcessProps> = ({ id }) => {
           } else {
             const [{ directory, name: firstName }] = fileReaders;
 
+            // eslint-disable-next-line react/set-state-in-effect -- Shows the first file as the readers start
             setCurrentTransfer([directory, { name: firstName } as File]);
             processObjectReader(fileReaders);
           }
@@ -169,8 +168,15 @@ const Transfer: FC<ComponentProcessProps> = ({ id }) => {
   );
 
   return (
-    <StyledTransfer onContextMenu={haltEvent} {...closeOnEscape}>
-      <h1>
+    <StyledTransfer
+      ref={transferRef}
+      // Named by what it does, as the file it is on keeps changing
+      aria-label={actionName}
+      onContextMenu={haltEvent}
+      role="group"
+      {...closeOnEscape}
+    >
+      <h1 id={titleId}>
         {name
           ? `${actionName} '${
               name.length >= MAX_TITLE_LENGTH
@@ -182,6 +188,9 @@ const Transfer: FC<ComponentProcessProps> = ({ id }) => {
       <div>
         <h2>{cd ? `To '${cd}'` : ""}</h2>
         <progress
+          {...(name
+            ? { "aria-labelledby": titleId }
+            : { "aria-label": "Transfer progress" })}
           max={totalTransferSize}
           value={
             totalTransferSize === Number.POSITIVE_INFINITY
@@ -190,7 +199,7 @@ const Transfer: FC<ComponentProcessProps> = ({ id }) => {
           }
         />
       </div>
-      <nav>
+      <nav role="presentation">
         <StyledButton onClick={() => closeWithTransition(id)}>
           Cancel
         </StyledButton>
@@ -199,4 +208,4 @@ const Transfer: FC<ComponentProcessProps> = ({ id }) => {
   );
 };
 
-export default memo(Transfer);
+export default Transfer;
