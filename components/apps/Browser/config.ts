@@ -70,11 +70,6 @@ export const bookmarks: Bookmark[] = [
     name: "Winamp Skin Museum",
     url: "https://skins.webamp.org/",
   },
-  {
-    icon: "/System/Icons/Favicons/aos.webp",
-    name: "AaronOS",
-    url: "https://aaronos.dev/",
-  },
 ];
 
 export const HOME_PAGE = "https://www.google.com/webhp?igu=1";
