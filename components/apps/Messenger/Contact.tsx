@@ -1,83 +1,65 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { type Event } from "nostr-tools";
-import Profile from "components/apps/Messenger/Profile";
-import {
-  OLAMOV_OWNER_AVATAR,
-  OLAMOV_OWNER_NAME,
-} from "components/apps/Messenger/constants";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   copyKeyMenuItems,
-  decryptMessage,
   shortTimeStamp,
 } from "components/apps/Messenger/functions";
 import { useNostrProfile } from "components/apps/Messenger/hooks";
-import { useMenu } from "contexts/menu";
+import Profile from "components/apps/Messenger/Profile";
+import { type DirectMessage } from "components/apps/Messenger/types";
+import { useMenuActions } from "contexts/menu";
+import { useIsVisible } from "hooks/useIsVisible";
 import Button from "styles/common/Button";
 import { MENU_SEPERATOR, MILLISECONDS_IN_MINUTE } from "utils/constants";
-import { useIsVisible } from "hooks/useIsVisible";
 
 type ContactProps = {
-  isRequest?: boolean;
-  lastEvent: Event;
-  onAccept?: () => void;
-  onBlock?: () => void;
+  block: () => void;
+  deleteChat: () => void;
+  lastMessage?: DirectMessage;
   onClick: () => void;
-  pinned?: boolean;
+  onSelect?: () => void;
   pubkey: string;
   publicKey: string;
-  unreadEvent: boolean;
+  selected?: boolean;
+  unread: boolean;
 };
 
 const Contact: FC<ContactProps> = ({
-  isRequest,
-  lastEvent,
-  onAccept,
-  onBlock,
+  block,
+  deleteChat,
+  lastMessage,
   onClick,
-  pinned,
+  onSelect,
   pubkey,
   publicKey,
-  unreadEvent,
+  selected,
+  unread,
 }) => {
-  const {
-    content = "",
-    created_at = 0,
-    id,
-    pubkey: eventPubkey,
-  } = lastEvent || {};
-  const [decryptedContent, setDecryptedContent] = useState("");
+  const { content = "", created_at = 0, pubkey: sender } = lastMessage || {};
   const [timeStamp, setTimeStamp] = useState("");
   const elementRef = useRef<HTMLLIElement | null>(null);
   const isVisible = useIsVisible(elementRef);
   const { nip05, picture, userName } = useNostrProfile(pubkey, isVisible);
-  const unreadClass = unreadEvent ? "unread" : undefined;
-  const { contextMenu } = useMenu();
-  const { onContextMenuCapture } = useMemo(
-    () =>
-      contextMenu?.(() => [
-        {
-          action: onClick,
-          icon: "🔐",
-          label: "Start end-to-end encrypted chat",
-        },
-        MENU_SEPERATOR,
-        ...copyKeyMenuItems(pubkey),
-      ]),
-    [contextMenu, onClick, pubkey]
-  );
-
-  useEffect(() => {
-    if (content && isVisible) {
-      decryptMessage(id, content, pubkey).then(
-        (message) => message && setDecryptedContent(message)
-      );
-    }
-  }, [content, id, isVisible, pubkey]);
+  const unreadClass = unread ? "unread" : undefined;
+  const captionId = useId();
+  const { contextMenu } = useMenuActions();
+  const { onContextMenuCapture } = contextMenu(() => [
+    {
+      action: onClick,
+      icon: "🔐",
+      label: "Start end-to-end encrypted chat",
+    },
+    MENU_SEPERATOR,
+    ...copyKeyMenuItems(pubkey),
+    MENU_SEPERATOR,
+    ...(lastMessage ? [{ action: deleteChat, label: "Delete chat" }] : []),
+    { action: block, label: "Block" },
+  ]);
 
   useEffect(() => {
     let interval = 0;
 
     if (created_at) {
+      // eslint-disable-next-line react/set-state-in-effect -- The relative timestamp is refreshed on an interval
       setTimeStamp(shortTimeStamp(created_at));
 
       interval = window.setInterval(
@@ -93,34 +75,37 @@ const Contact: FC<ContactProps> = ({
     <li
       ref={elementRef}
       className={unreadClass}
-      data-pinned={pinned ? "owner" : undefined}
       onContextMenuCapture={onContextMenuCapture}
     >
-      <Button onClick={onClick}>
+      {onSelect && (
+        <input
+          aria-label={`Select ${userName || ""}`}
+          checked={selected}
+          onChange={onSelect}
+          type="checkbox"
+        />
+      )}
+      {/* Named by its caption, as Chromium skips the text of a figure */}
+      <Button aria-labelledby={captionId} onClick={onSelect || onClick}>
         <Profile
+          captionId={captionId}
           nip05={nip05}
-          picture={pinned ? OLAMOV_OWNER_AVATAR : picture}
+          picture={picture}
           pubkey={pubkey}
-          userName={pinned ? userName || OLAMOV_OWNER_NAME : userName}
+          userName={userName}
         >
           <div>
             <div className={unreadClass}>
-              {eventPubkey === publicKey ? "You: " : ""}
-              {decryptedContent || content}
+              {sender === publicKey ? "You: " : ""}
+              {content}
             </div>
             {timeStamp ? "·" : ""}
             <div>{timeStamp}</div>
           </div>
         </Profile>
       </Button>
-      {isRequest && (
-        <div className="request-actions">
-          <Button onClick={onAccept}>Accept</Button>
-          <Button onClick={onBlock}>Block</Button>
-        </div>
-      )}
     </li>
   );
 };
 
-export default memo(Contact);
+export default Contact;

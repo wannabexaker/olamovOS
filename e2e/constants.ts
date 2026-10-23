@@ -2,7 +2,6 @@ import { type Locator } from "@playwright/test";
 import { type SessionData } from "contexts/session/types";
 
 declare global {
-  // eslint-disable-next-line vars-on-top, no-var
   var capturedConsoleLogs: string[] | undefined;
 
   interface Window {
@@ -36,7 +35,14 @@ export const EXCLUDED_CONSOLE_LOGS = (
     );
   } else if (browserName === "firefox") {
     excludedConsoleLogs.push(
-      "Found a sectioned h1 element with no specified font-size or margin properties."
+      "Found a sectioned h1 element with no specified font-size or margin properties.",
+      "Use of the orientation sensor is deprecated.",
+      "MouseEvent.mozInputSource is deprecated.",
+      "WebGPU is disabled by blocklist",
+      // Firefox 155 flags any site that stores data before a user activation
+      "has been classified as a bounce tracker",
+      // Playwright's Firefox driver, e.g. when a reload aborts a worker load
+      "chrome://juggler/"
     );
   }
 
@@ -70,7 +76,7 @@ export const EXCLUDED_CONSOLE_LOGS = (
       'Error: "Content-Security-Policy:',
       "an ancestor violates the following Content Security Policy directive",
       // Messenger
-      "WebSocket connection to 'wss://public.relaying.io/' failed:"
+      "WebSocket connection to 'wss://"
     );
 
     if (browserName === "firefox") {
@@ -97,19 +103,16 @@ export const EXCLUDED_CONSOLE_LOGS = (
   return excludedConsoleLogs;
 };
 
-export type IsShown = boolean | ((browserName: string) => boolean);
+export type IsShown = ((browserName: string) => boolean) | boolean;
 
 export type MenuItems = Record<string, IsShown>;
 
 type LocatorClickProps = Parameters<Locator["click"]>[0];
-type LocatorWaitForProps = Parameters<Locator["waitFor"]>[0];
 
 export const TYPE_DELAY = 75;
 
 export const EXACT = { exact: true };
-export const FORCE = { force: true };
 export const RIGHT_CLICK = { button: "right" } as LocatorClickProps;
-export const VISIBLE = { state: "visible" } as LocatorWaitForProps;
 
 const APP_CONTAINER_SELECTOR = "div";
 const VIEWPORT_SELECTOR = "div";
@@ -124,18 +127,23 @@ export const CONTEXT_MENU_ENTRIES_SELECTOR = `${CONTEXT_MENU_SELECTOR}>ol>li`;
 export const DESKTOP_SELECTOR = `${NEXT_JS_CONTAINER_SELECTOR}>main`;
 export const BACKGROUND_CANVAS_SELECTOR = `${DESKTOP_SELECTOR}>canvas`;
 export const DESKTOP_ENTRIES_SELECTOR = `${DESKTOP_SELECTOR}>ol>li`;
+export const DESKTOP_ENTRIES_RENAMING_SELECTOR = `${DESKTOP_ENTRIES_SELECTOR}>button>figure>textarea`;
 export const SELECTION_SELECTOR = `${DESKTOP_SELECTOR}>ol>span`;
 export const TASKBAR_SELECTOR = `${DESKTOP_SELECTOR}>nav:not([style])`;
 export const TASKBAR_ENTRIES_SELECTOR = `${TASKBAR_SELECTOR}>ol`;
 export const TASKBAR_ENTRY_SELECTOR = `${TASKBAR_ENTRIES_SELECTOR}>li`;
 export const TASKBAR_ENTRY_PEEK_SELECTOR = `${TASKBAR_ENTRY_SELECTOR}>div:not([title])`;
-export const TASKBAR_ENTRY_PEEK_IMAGE_SELECTOR = `${TASKBAR_ENTRY_PEEK_SELECTOR}>img`;
-export const SEARCH_MENU_SELECTOR = `${DESKTOP_SELECTOR}>nav#searchMenu`;
+export const TASKBAR_ENTRY_PEEK_IMAGE_SELECTOR = `${TASKBAR_ENTRY_PEEK_SELECTOR}>canvas`;
+export const TASKBAR_ENTRY_LABEL_SUFFIX = " - 1 running window";
+export const TASKBAR_ENTRY_RUNNING_LABEL = new RegExp(
+  `${TASKBAR_ENTRY_LABEL_SUFFIX}$`
+);
+export const SEARCH_MENU_SELECTOR = `${DESKTOP_SELECTOR}>section#searchMenu`;
 export const SEARCH_MENU_INPUT_SELECTOR = `${SEARCH_MENU_SELECTOR} input[placeholder='Type here to search']`;
 export const SEARCH_MENU_RESULTS_SELECTOR = `${SEARCH_MENU_SELECTOR}>div>.content>div>.list>figure:first-child>ol`;
 export const SEARCH_BUTTON_SELECTOR = `${TASKBAR_SELECTOR}>[title='Type here to search']`;
 export const START_BUTTON_SELECTOR = `${TASKBAR_SELECTOR}>[title=Start]`;
-export const START_MENU_SELECTOR = `${DESKTOP_SELECTOR}>nav#startMenu`;
+export const START_MENU_SELECTOR = `${DESKTOP_SELECTOR}>section#startMenu`;
 export const START_MENU_SIDEBAR_SELECTOR = `${START_MENU_SELECTOR}>nav`;
 export const WINDOW_SELECTOR = `${DESKTOP_SELECTOR}>${WINDOW_DRAG_SELECTOR}>section`;
 export const WINDOW_TITLEBAR_SELECTOR = `${WINDOW_SELECTOR}>${VIEWPORT_SELECTOR}>header`;
@@ -152,15 +160,15 @@ export const FILE_EXPLORER_ENTRIES_RENAMING_SELECTOR = `${FILE_EXPLORER_ENTRIES_
 export const TERMINAL_SELECTOR = `${WINDOW_SELECTOR}>${VIEWPORT_SELECTOR}>${APP_CONTAINER_SELECTOR}>.terminal`;
 export const TERMINAL_ROWS_SELECTOR = `${TERMINAL_SELECTOR}>.xterm-screen>.xterm-rows>div:not(:empty)`;
 export const SHEEP_SELECTOR = `${DESKTOP_SELECTOR}>div>img[src^=data]`;
+export const FLY_SELECTOR = `${DESKTOP_SELECTOR}>canvas#desktop-fly`;
 
-export const CALENDAR_LABEL = /^Calendar$/;
-export const CLOCK_LABEL = /^Clock$/;
+export const CALENDAR_LABEL = /^Date and Time Information$/;
+export const CLOCK_LABEL = /^System Clock/;
 export const FILE_EXPLORER_ADDRESS_BAR_LABEL = /^Address$/;
-export const START_BUTTON_LABEL = /^Start$/;
+export const TALOS_LABEL = /^Talos$/;
 
 export const ACCESSIBILITY_EXCEPTION_IDS = [
   "aria-allowed-role",
-  "image-redundant-alt",
   "meta-viewport",
 ];
 
@@ -168,7 +176,7 @@ export const CLIPBOARD_WRITE_HEADLESS_NOT_SUPPORTED_BROWSERS = new Set([
   "firefox",
   "webkit",
 ]);
-export const DIRECTORY_PICKER_NOT_SUPPORTED_BROWSERS = new Set([
+const DIRECTORY_PICKER_NOT_SUPPORTED_BROWSERS = new Set([
   // https://developer.mozilla.org/en-US/docs/Web/API/Window/showDirectoryPicker#browser_compatibility
   "webkit",
   "firefox",
@@ -181,9 +189,7 @@ export const WEBGL_OFFSCREEN_NOT_SUPPORTED_BROWSERS = new Set(
       ]
     : []
 );
-export const MEDIA_RECORDER_HEADLESS_NOT_SUPPORTED_BROWSERS = new Set([
-  "webkit",
-]);
+const MEDIA_RECORDER_HEADLESS_NOT_SUPPORTED_BROWSERS = new Set(["webkit"]);
 export const PYODIDE_HEADLESS_NOT_SUPPORTED_BROWSERS = new Set(["firefox"]);
 export const WEBGPU_HEADLESS_NOT_SUPPORTED_BROWSERS = new Set([
   "firefox",
@@ -226,9 +232,11 @@ export const DESKTOP_MENU_ITEMS: MenuItems = {
 
 export const CLOCK_MENU_ITEMS = [/^Local time$/, /^Server time$/];
 
-export const TASKBAR_ENTRIES_MENU_ITEMS = (hasWebGpu: boolean): RegExp[] => [
+export const SHOW_TALOS_MENU_ITEM = /^Show Talos button$/;
+
+export const TASKBAR_ENTRIES_MENU_ITEMS = (hasAI: boolean): RegExp[] => [
   /^Enter full screen$/,
-  ...(hasWebGpu ? [/^Show Talos button$/] : []),
+  ...(hasAI ? [SHOW_TALOS_MENU_ITEM] : []),
   /^Show the desktop$/,
 ];
 
@@ -276,7 +284,7 @@ export const START_MENU_FOLDERS = {
 };
 
 export const TEST_APP_CONTAINER_APP = "Marked";
-export const TEST_APP_CONTAINER_APP_TITLE = (file: string | null): string =>
+export const TEST_APP_CONTAINER_APP_TITLE = (file: null | string): string =>
   `${file || ""}.url - ${TEST_APP_CONTAINER_APP}`;
 
 export const TEST_APP = "FileExplorer";
@@ -307,12 +315,13 @@ export const TEST_SEARCH_RESULT_TITLE = /^\/CREDITS.md/;
 export const NEW_FOLDER_LABEL = /^New folder$/;
 export const NEW_FILE_LABEL = /^New Text Document.txt$/;
 export const NEW_FILE_LABEL_TEXT = "New Text Document.txt";
+export const RICH_TEXT_FILE_LABEL = /^Note.whtml$/;
+export const RICH_TEXT_FILE_LABEL_TEXT = "Note.whtml";
 
 export const CLOCK_REGEX = /^(1[0-2]|0?[1-9])(?::[0-5]\d){2}\s?(AM|PM)$/;
 
 export const BASE_APP_TITLE = "Olamov OS";
 export const BASE_APP_FAVICON = /^\/favicon.ico$/;
-export const BASE_APP_FAVICON_TEXT = "/favicon.ico";
 
 export const UNKNOWN_ICON_PATH = "/System/Icons/48x48/unknown.webp";
 

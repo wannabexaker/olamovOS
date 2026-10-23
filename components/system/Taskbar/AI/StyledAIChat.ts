@@ -1,8 +1,10 @@
 import { m as motion } from "motion/react";
 import styled from "styled-components";
+import VisuallyHidden from "styles/common/VisuallyHidden";
 import { TASKBAR_HEIGHT } from "utils/constants";
 
 type StyledAIChatProps = {
+  $attachments: boolean;
   $primaryColor: string;
   $responding: boolean;
   $scrollbarVisible: boolean;
@@ -23,6 +25,59 @@ const StyledAIChat = styled(motion.section)<StyledAIChatProps>`
   position: absolute;
   right: 0;
   z-index: ${({ $zIndex }) => $zIndex};
+
+  .reply-status {
+    ${VisuallyHidden};
+  }
+
+  .attachments {
+    bottom: calc(16px + var(--composer-height, 90px) - 66px);
+    display: flex;
+    gap: 6px;
+    max-width: calc(100% - 124px);
+    overflow: hidden;
+    position: absolute;
+    right: 59px;
+    z-index: 1;
+
+    li {
+      flex-shrink: 0;
+      height: 54px;
+      position: relative;
+      width: 54px;
+    }
+
+    img {
+      border: 1px solid rgb(102 102 102);
+      border-radius: 6px;
+      height: 100%;
+      object-fit: cover;
+      width: 100%;
+    }
+
+    .remove {
+      background-color: rgb(45 45 45);
+      border: 1px solid rgb(102 102 102);
+      border-radius: 50%;
+      display: flex;
+      height: 18px;
+      place-content: center;
+      place-items: center;
+      position: absolute;
+      right: -5px;
+      top: -5px;
+      width: 18px;
+
+      > svg {
+        fill: #fff;
+        width: 8px;
+      }
+
+      &:hover {
+        background-color: rgb(65 65 65);
+      }
+    }
+  }
 
   section {
     &::-webkit-scrollbar {
@@ -145,26 +200,27 @@ const StyledAIChat = styled(motion.section)<StyledAIChatProps>`
         }
       }
 
-      .ai {
-        /* stylelint-disable-next-line selector-type-no-unknown */
-        think {
-          border-left: 2px solid rgb(78 78 86);
-          color: rgb(166 166 166);
-          display: flex;
-          flex-direction: column;
-          font-size: 13px;
-          gap: 10px;
-          margin-left: 5px;
-          margin-top: 12px;
-          padding-left: 10px;
-          white-space: normal;
-        }
+      .thoughts {
+        border-left: 2px solid rgb(78 78 86);
+        color: rgb(166 166 166);
+        font-size: 13px;
+        margin: 12px 0 12px 41px;
+        overflow-wrap: anywhere;
+        padding-left: 10px;
+      }
 
-        .message.hide-think {
-          /* stylelint-disable-next-line selector-type-no-unknown */
-          think {
-            display: none;
-          }
+      .images {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 8px 0 0 36px;
+
+        img {
+          border: 1px solid rgb(65 65 65);
+          border-radius: 8px;
+          max-height: 160px;
+          max-width: 100%;
+          object-fit: contain;
         }
       }
 
@@ -199,14 +255,10 @@ const StyledAIChat = styled(motion.section)<StyledAIChatProps>`
 
       .message {
         cursor: text;
+        overflow-wrap: anywhere;
         padding-left: 36px;
         user-select: text;
         white-space: pre-line;
-
-        * {
-          cursor: text;
-          user-select: text;
-        }
 
         pre {
           background-color: rgb(26 26 26);
@@ -218,24 +270,22 @@ const StyledAIChat = styled(motion.section)<StyledAIChatProps>`
         code {
           white-space: pre-wrap;
 
-          &.language-js,
-          &.language-python {
-            &::before {
-              background-color: rgb(29 29 29);
-              border-top-left-radius: 5px;
-              border-top-right-radius: 5px;
-              display: flex;
-              font-family: ${({ theme }) => theme.formats.systemFont};
-              font-size: 15px;
-              font-weight: 600;
-              height: 40px;
-              left: -12px;
-              padding: 0 12px;
-              place-items: center;
-              position: relative;
-              top: -12px;
-              width: calc(100% + 24px);
-            }
+          &.language-js::before,
+          &.language-python::before {
+            background-color: rgb(29 29 29);
+            border-top-left-radius: 5px;
+            border-top-right-radius: 5px;
+            display: flex;
+            font-family: ${({ theme }) => theme.formats.systemFont};
+            font-size: 15px;
+            font-weight: 600;
+            height: 40px;
+            left: -12px;
+            padding: 0 12px;
+            place-items: center;
+            position: relative;
+            top: -12px;
+            width: calc(100% + 24px);
           }
 
           &.language-js::before {
@@ -252,13 +302,101 @@ const StyledAIChat = styled(motion.section)<StyledAIChatProps>`
             visibility: visible;
           }
         }
+      }
 
-        p:last-child {
-          display: inline;
+      .thoughts,
+      .message {
+        * {
+          cursor: text;
+          user-select: text;
         }
+      }
 
-        pre:last-child {
-          display: inline-block;
+      .ai {
+        .markdown {
+          white-space: normal;
+
+          > * + *,
+          li > * + * {
+            margin-top: 12px;
+          }
+
+          h1,
+          h2,
+          h3,
+          h4,
+          h5,
+          h6 {
+            font-size: 14px;
+            font-weight: 600;
+          }
+
+          h1 {
+            font-size: 20px;
+          }
+
+          h2 {
+            font-size: 18px;
+          }
+
+          h3 {
+            font-size: 16px;
+          }
+
+          ol,
+          ul {
+            padding-left: 20px;
+          }
+
+          ol {
+            list-style: decimal;
+          }
+
+          ul {
+            list-style: disc;
+          }
+
+          li + li {
+            margin-top: 6px;
+          }
+
+          a {
+            color: ${({ $primaryColor }) => $primaryColor};
+            cursor: pointer;
+            text-decoration: underline;
+          }
+
+          blockquote {
+            border-left: 2px solid rgb(78 78 86);
+            color: rgb(200 200 200);
+            padding-left: 10px;
+          }
+
+          :not(pre) > code {
+            background-color: rgb(26 26 26);
+            border-radius: 4px;
+            padding: 1px 4px;
+          }
+
+          hr {
+            border-top: 1px solid rgb(65 65 65);
+          }
+
+          img {
+            max-width: 100%;
+          }
+
+          table {
+            border-collapse: collapse;
+            display: block;
+            overflow-x: auto;
+          }
+
+          td,
+          th {
+            border: 1px solid rgb(65 65 65);
+            padding: 4px 8px;
+          }
         }
       }
 
@@ -308,6 +446,7 @@ const StyledAIChat = styled(motion.section)<StyledAIChatProps>`
         .prompt {
           color: rgb(15 15 15);
           font-size: 12px;
+          overflow-wrap: anywhere;
           padding-bottom: 6px;
           padding-left: 6px;
         }
@@ -360,10 +499,6 @@ const StyledAIChat = styled(motion.section)<StyledAIChatProps>`
             background-color: rgb(50 50 50);
           }
 
-          &.canceling {
-            background-color: rgb(42 42 42);
-          }
-
           .stop-icon {
             fill: ${({ $primaryColor }) => $primaryColor};
             height: 18px;
@@ -398,9 +533,12 @@ const StyledAIChat = styled(motion.section)<StyledAIChatProps>`
           margin-inline-start: 5px;
         }
 
-        a {
+        button[type="button"] {
+          background-color: transparent;
           color: ${({ $primaryColor }) => $primaryColor};
           cursor: pointer;
+          font-family: inherit;
+          font-size: inherit;
           margin-left: 4px;
         }
 
@@ -463,7 +601,8 @@ const StyledAIChat = styled(motion.section)<StyledAIChatProps>`
         }
 
         &:hover,
-        &.last {
+        &.last,
+        :root[data-keyboard] & {
           .control {
             visibility: visible;
           }
@@ -541,6 +680,33 @@ const StyledAIChat = styled(motion.section)<StyledAIChatProps>`
       }
     }
 
+    .add-image {
+      background-color: transparent;
+      border-radius: 5px;
+      bottom: 59px;
+      height: 36px;
+      position: absolute;
+      right: 19px;
+      width: 36px;
+
+      .image {
+        fill: rgb(206 206 206);
+        height: 20px;
+        pointer-events: none;
+        position: relative;
+        top: 1px;
+        width: 20px;
+      }
+
+      &:hover {
+        background-color: rgb(44 44 44);
+      }
+
+      &:active {
+        background-color: rgb(38 38 38);
+      }
+    }
+
     .submit {
       background-color: transparent;
       border-radius: 5px;
@@ -582,7 +748,8 @@ const StyledAIChat = styled(motion.section)<StyledAIChatProps>`
       letter-spacing: 0.6px;
       min-height: 90px;
       overflow: hidden;
-      padding: 13px 44px 13px 15px;
+      padding: ${({ $attachments }) => ($attachments ? "77px" : "13px")} 44px
+        13px 15px;
       position: absolute;
       resize: none;
       right: 14px;

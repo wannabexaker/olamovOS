@@ -1,9 +1,10 @@
 import { PREVENT_SCROLL } from "utils/constants";
+import { isKeyboardInMenu } from "utils/keyboard";
 
 export const START_BUTTON_TITLE = "Start";
 export const SEARCH_BUTTON_TITLE = "Type here to search";
 
-/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types */
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
 export const importAIButton = () =>
   import("components/system/Taskbar/AI/AIButton");
 export const importAIChat = () => import("components/system/Taskbar/AI/AIChat");
@@ -24,7 +25,8 @@ export const maybeCloseTaskbarMenu = (
   closeOnTaskbarEntries = false
 ): void => {
   const focusedInsideMenu =
-    focusedElement && menuElement?.contains(focusedElement);
+    (focusedElement && menuElement?.contains(focusedElement)) ||
+    isKeyboardInMenu(focusedElement);
 
   if (!focusedInsideMenu) {
     const taskbarElement = menuElement?.nextSibling;

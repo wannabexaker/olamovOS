@@ -1,18 +1,17 @@
 import { basename } from "path";
+import { Chessboard2 } from "@chrisoakman/chessboard2/dist/chessboard2.min.mjs";
+import { Chess as ChessGame } from "chess.js";
 import {
-  memo,
-  useCallback,
+  type ChangeEvent,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
-  type ChangeEvent,
 } from "react";
-import { Chess as ChessGame } from "chess.js";
-import { Chessboard2 } from "@chrisoakman/chessboard2/dist/chessboard2.min.mjs";
-import stockfishLiteJsUrl from "stockfish/bin/stockfish-18-lite.js";
-import stockfishLiteWasmUrl from "stockfish/bin/stockfish-18-lite.wasm";
-import stockfishLiteSingleJsUrl from "stockfish/bin/stockfish-18-lite-single.js";
-import stockfishLiteSingleWasmUrl from "stockfish/bin/stockfish-18-lite-single.wasm";
+import stockfishLiteSingleJsUrl from "stockfish/bin/stockfish-19-lite-single.js";
+import stockfishLiteSingleWasmUrl from "stockfish/bin/stockfish-19-lite-single.wasm";
+import stockfishLiteJsUrl from "stockfish/bin/stockfish-19-lite.js";
+import stockfishLiteWasmUrl from "stockfish/bin/stockfish-19-lite.wasm";
 import StyledChess from "components/apps/Chess/StyledChess";
 import {
   type Chessboard2Config,
@@ -24,14 +23,37 @@ import {
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import StyledLoading from "components/system/Apps/StyledLoading";
 import useTitle from "components/system/Window/useTitle";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
+import { useFileSystemActions } from "contexts/fileSystem";
+import { useProcess } from "contexts/process";
 import useResizeObserver from "hooks/useResizeObserver";
-import { clsx, loadFiles } from "utils/functions";
+import { TRANSITIONS_IN_MILLISECONDS } from "utils/constants";
+import { clsx, haltEvent, loadFiles } from "utils/functions";
 
 const PIECE_THEME = "/Program Files/Chess/img/{piece}.svg";
 
 const SKILL_LEVELS = Array.from({ length: 21 }, (_, i) => i);
+
+const FILES = "abcdefgh";
+
+// Keyboard cursor moves as seen from White's side of the board, with Home &
+// End going past the ends of the row, where moves stop
+const CURSOR_STEPS: Record<string, [number, number]> = {
+  ArrowDown: [0, -1],
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, 1],
+  End: [8, 0],
+  Home: [-8, 0],
+};
+
+const PIECE_NAMES: Record<string, string> = {
+  b: "bishop",
+  k: "king",
+  n: "knight",
+  p: "pawn",
+  q: "queen",
+  r: "rook",
+};
 
 const skillToMovetimeMs = (skill: number): number => 50 + skill * 100;
 
@@ -51,7 +73,7 @@ const stockfishUrls = (): { jsUrl: string; wasmUrl: string } =>
       };
 
 type Status = {
-  className?: "thinking" | "over";
+  className?: "over" | "thinking";
   text: string;
 };
 
@@ -68,14 +90,13 @@ const firstGameOnly = (pgn: string): string => {
 };
 
 const Chess: FC<ComponentProcessProps> = ({ id }) => {
-  const { processes: { [id]: { libs = [], url = "" } = {} } = {} } =
-    useProcesses();
-  const { readFile } = useFileSystem();
+  const { libs = [], url = "" } = useProcess(id);
+  const { readFile } = useFileSystemActions();
   const { prependFileToTitle } = useTitle(id);
   const boardElRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<Chessboard2Instance | undefined>(undefined);
   const chessRef = useRef<ChessGame | undefined>(undefined);
-  const workerRef = useRef<Worker | undefined>(undefined);
+  const workerRef = useRef<undefined | Worker>(undefined);
   const moveSeqRef = useRef(0);
   const thinkingRef = useRef(false);
   const cvcTimerRef = useRef<number | undefined>(undefined);
@@ -83,6 +104,14 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
   const selectedSquareRef = useRef<string | undefined>(undefined);
   const justSelectedRef = useRef(false);
   const [selectedSquare, setSelectedSquare] = useState<string>();
+  const squareActionsRef = useRef<{
+    clearSelection: () => void;
+    onSquare: (square: string) => void;
+  }>(undefined);
+  const [movedCursorSquare, setMovedCursorSquare] = useState<string>();
+  const [cursorAnnouncement, setCursorAnnouncement] = useState("");
+  const [boardFocused, setBoardFocused] = useState(false);
+  const [engineMove, setEngineMove] = useState("");
   const detachClickRef = useRef<(() => void) | undefined>(undefined);
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState<GameMode>("hvc");
@@ -100,14 +129,16 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
   const reviewRef = useRef(false);
   const orientationRef = useRef(orientation);
 
-  modeRef.current = mode;
-  playerSideRef.current = playerSide;
-  skillRef.current = skill;
-  reviewRef.current = pgnMoves.length > 0;
-  orientationRef.current = orientation;
-  selectedSquareRef.current = selectedSquare;
+  useLayoutEffect(() => {
+    modeRef.current = mode;
+    playerSideRef.current = playerSide;
+    skillRef.current = skill;
+    reviewRef.current = pgnMoves.length > 0;
+    orientationRef.current = orientation;
+    selectedSquareRef.current = selectedSquare;
+  });
 
-  const isHumanTurn = useCallback((): boolean => {
+  const isHumanTurn = (): boolean => {
     const chess = chessRef.current;
 
     if (!chess) return false;
@@ -115,9 +146,9 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
     if (modeRef.current === "cvc") return false;
 
     return chess.turn() === playerSideRef.current;
-  }, []);
+  };
 
-  const computeStatus = useCallback((): Status => {
+  const computeStatus = (): Status => {
     const chess = chessRef.current;
 
     if (!chess) return { text: "Loading..." };
@@ -144,9 +175,9 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
     }
 
     return { text: `${sideName(chess.turn())} to move` };
-  }, [isHumanTurn]);
+  };
 
-  const refreshStatus = useCallback(() => {
+  const refreshStatus = (): void => {
     setStatus((prev) => {
       const next = computeStatus();
 
@@ -154,9 +185,9 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
         ? prev
         : next;
     });
-  }, [computeStatus]);
+  };
 
-  const requestEngineMove = useCallback(() => {
+  const requestEngineMove = (): void => {
     const chess = chessRef.current;
     const worker = workerRef.current;
 
@@ -167,82 +198,83 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
     }
 
     thinkingRef.current = true;
+    setEngineMove("");
     refreshStatus();
 
     worker.postMessage(`setoption name Skill Level value ${skillRef.current}`);
     worker.postMessage(`position fen ${chess.fen()}`);
     worker.postMessage(`go movetime ${skillToMovetimeMs(skillRef.current)}`);
-  }, [refreshStatus]);
+  };
 
-  const applyEngineMove = useCallback(
-    (uci: string) => {
-      const chess = chessRef.current;
-      const board = boardRef.current;
+  const applyEngineMove = (uci: string): void => {
+    const chess = chessRef.current;
+    const board = boardRef.current;
 
-      if (!chess || !board) return;
+    if (!chess || !board) return;
 
-      try {
-        chess.move({
-          from: uci.slice(0, 2),
-          promotion: uci.length > 4 ? uci[4] : "q",
-          to: uci.slice(2, 4),
-        });
-      } catch {
-        thinkingRef.current = false;
-        refreshStatus();
-        return;
-      }
+    const move = {
+      from: uci.slice(0, 2),
+      promotion: uci.length > 4 ? uci[4] : "q",
+      to: uci.slice(2, 4),
+    };
 
-      board.position(chess.fen(), false);
+    try {
+      const { color, san } = chess.move(move);
+
+      setEngineMove(
+        `${sideName(color)} played ${san.replace("#", "").replace("+", ", check")}`
+      );
+    } catch {
       thinkingRef.current = false;
       refreshStatus();
+      return;
+    }
 
-      if (
-        !chess.isGameOver() &&
-        modeRef.current === "cvc" &&
-        moveSeqRef.current
-      ) {
-        const seq = moveSeqRef.current;
+    board.position(chess.fen(), false);
+    thinkingRef.current = false;
+    refreshStatus();
 
-        cvcTimerRef.current = window.setTimeout(() => {
-          if (seq === moveSeqRef.current) requestEngineMove();
-        }, 250);
-      } else if (!chess.isGameOver() && !isHumanTurn()) {
-        requestEngineMove();
-      }
-    },
-    [isHumanTurn, refreshStatus, requestEngineMove]
-  );
+    if (
+      !chess.isGameOver() &&
+      modeRef.current === "cvc" &&
+      moveSeqRef.current
+    ) {
+      const seq = moveSeqRef.current;
 
-  const onEngineMessage = useCallback(
-    (event: MessageEvent<string>) => {
-      const line = typeof event.data === "string" ? event.data : "";
+      cvcTimerRef.current = window.setTimeout(() => {
+        if (seq === moveSeqRef.current) requestEngineMove();
+      }, 250);
+    } else if (!chess.isGameOver() && !isHumanTurn()) {
+      requestEngineMove();
+    }
+  };
 
-      if (!line.startsWith("bestmove ")) return;
+  const onEngineMessage = (event: MessageEvent<string>): void => {
+    const line = typeof event.data === "string" ? event.data : "";
 
-      const [, move] = line.split(" ");
+    if (!line.startsWith("bestmove ")) return;
 
-      if (!move || move === "(none)") {
-        thinkingRef.current = false;
-        refreshStatus();
-        return;
-      }
+    const [, move] = line.split(" ");
 
-      applyEngineMove(move);
-    },
-    [applyEngineMove, refreshStatus]
-  );
+    if (!move || move === "(none)") {
+      thinkingRef.current = false;
+      refreshStatus();
+      return;
+    }
 
-  const stopEngine = useCallback(() => {
+    applyEngineMove(move);
+  };
+
+  const stopEngine = (): void => {
     if (cvcTimerRef.current !== undefined) {
       window.clearTimeout(cvcTimerRef.current);
       cvcTimerRef.current = undefined;
     }
     workerRef.current?.postMessage("stop");
     thinkingRef.current = false;
-  }, []);
+  };
 
-  const newGame = useCallback(() => {
+  const newGame = (): void => {
     const chess = chessRef.current;
     const board = boardRef.current;
 
@@ -250,6 +282,7 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
 
     moveSeqRef.current += 1;
     stopEngine();
+    setEngineMove("");
 
     setPgnMoves([]);
     setPgnIndex(-1);
@@ -266,29 +299,27 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
         : "white"
     );
 
-    refreshStatus();
+    // Always new, as the reset board changes what the cursor is on
+    setStatus(computeStatus());
 
     if (!isHumanTurn()) requestEngineMove();
-  }, [isHumanTurn, refreshStatus, requestEngineMove, stopEngine]);
+  };
 
-  const jumpTo = useCallback(
-    (target: number) => {
-      const chess = chessRef.current;
-      const board = boardRef.current;
+  const jumpTo = (target: number): void => {
+    const chess = chessRef.current;
+    const board = boardRef.current;
 
-      if (!chess || !board) return;
+    if (!chess || !board) return;
 
-      const clamped = Math.max(-1, Math.min(target, pgnMoves.length - 1));
+    const clamped = Math.max(-1, Math.min(target, pgnMoves.length - 1));
 
-      chess.reset();
-      for (let i = 0; i <= clamped; i += 1) chess.move(pgnMoves[i]);
+    chess.reset();
+    for (let i = 0; i <= clamped; i += 1) chess.move(pgnMoves[i]);
 
-      board.position(chess.fen(), false);
-      setPgnIndex(clamped);
-      refreshStatus();
-    },
-    [pgnMoves, refreshStatus]
-  );
+    board.position(chess.fen(), false);
+    setPgnIndex(clamped);
+    refreshStatus();
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -439,20 +470,13 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
         }
 
         const flipped = orientationRef.current === "black";
-        const file = "abcdefgh"[flipped ? 7 - fileIdx : fileIdx];
+        const file = FILES[flipped ? 7 - fileIdx : fileIdx];
         const rank = flipped ? rankIdx + 1 : 8 - rankIdx;
 
         return `${file}${rank}`;
       };
 
-      const onSquareClick = (event: MouseEvent): void => {
-        const square = xyToSquare(event.clientX, event.clientY);
-        const justSelected = justSelectedRef.current;
-
-        justSelectedRef.current = false;
-
-        if (!square) return;
-
+      const onSquare = (square: string, justSelected = false): void => {
         const selected = selectedSquareRef.current;
 
         if (!selected) {
@@ -474,6 +498,16 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
         if (canSelectPieceAt(square)) selectSquare(square);
         else clearSelection();
       };
+      const onSquareClick = (event: MouseEvent): void => {
+        const square = xyToSquare(event.clientX, event.clientY);
+        const justSelected = justSelectedRef.current;
+
+        justSelectedRef.current = false;
+
+        if (square) onSquare(square, justSelected);
+      };
+
+      squareActionsRef.current = { clearSelection, onSquare };
 
       // chessboard2 preventDefaults touchstart/mousedown to start its own drag,
       // which suppresses the synthesized click event on both desktop and mobile
@@ -590,10 +624,14 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
       detachClickRef.current = undefined;
       workerRef.current?.terminate();
       workerRef.current = undefined;
-      try {
-        boardRef.current?.destroy();
-      } catch {
-        // chessboard2 may already be torn down
+      const board = boardRef.current;
+
+      if (board) {
+        try {
+          board.destroy();
+        } catch {
+          // chessboard2 may already be torn down
+        }
       }
       boardRef.current = undefined;
       chessRef.current = undefined;
@@ -602,20 +640,33 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
     [stopEngine]
   );
 
-  const onBoardResize = useCallback<ResizeObserverCallback>((entries) => {
-    const rect = entries[0]?.contentRect;
+  const fitFrameRef = useRef(0);
+  const onBoardResize: ResizeObserverCallback = ([entry]) => {
+    if (!entry) return;
 
-    if (!rect) return;
+    const start = performance.now();
+    let lastWidth = 0;
+    // chessboard2 sizes the squares from its on-screen width, so keep resizing
+    // until that settles, as the window may still be scaling in
+    const fit = (): void => {
+      const { width } = entry.target.getBoundingClientRect();
 
-    boardRef.current?.resize();
-    // chessboard2 sets the squares-container height to its measured width;
-    // measurement can lag by one frame during a window-resize storm,
-    // leaving a thin gap between the last rank and the .board-frame border.
-    // A second resize after the next layout pass catches up.
-    requestAnimationFrame(() => boardRef.current?.resize());
-  }, []);
+      boardRef.current?.resize();
 
-  useResizeObserver(ready ? boardElRef.current : undefined, onBoardResize);
+      if (
+        width !== lastWidth &&
+        performance.now() - start < TRANSITIONS_IN_MILLISECONDS.WINDOW * 2
+      ) {
+        lastWidth = width;
+        fitFrameRef.current = requestAnimationFrame(fit);
+      }
+    };
+
+    cancelAnimationFrame(fitFrameRef.current);
+    fit();
+  };
+
+  useResizeObserver(ready ? boardElRef : undefined, onBoardResize);
 
   useEffect(() => {
     if (ready) boardRef.current?.orientation(orientation);
@@ -665,6 +716,7 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
 
           moveSeqRef.current += 1;
           stopEngine();
+          setEngineMove("");
 
           chess.reset();
 
@@ -686,14 +738,14 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
             reviewRef.current = moves.length > 0;
             board.position(chess.fen(), false);
             prependFileToTitle(basename(url));
-            refreshStatus();
           } else {
             setPgnMoves([]);
             setPgnIndex(-1);
             reviewRef.current = false;
             board.start(false);
-            refreshStatus();
           }
+
+          refreshStatus();
         };
 
         apply();
@@ -707,32 +759,82 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
     };
   }, [prependFileToTitle, readFile, ready, refreshStatus, stopEngine, url]);
 
-  const onModeChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      setMode(event.target.value as GameMode);
-      window.setTimeout(newGame, 0);
-    },
-    [newGame]
-  );
+  const onModeChange = (event: ChangeEvent<HTMLSelectElement>): void => {
+    setMode(event.target.value as GameMode);
+    window.setTimeout(newGame, 0);
+  };
 
-  const onSideChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      setPlayerSide(event.target.value as Side);
-      window.setTimeout(newGame, 0);
-    },
-    [newGame]
-  );
+  const onSideChange = (event: ChangeEvent<HTMLSelectElement>): void => {
+    setPlayerSide(event.target.value as Side);
+    window.setTimeout(newGame, 0);
+  };
 
-  const onSkillChange = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
+  const onSkillChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     const next = Number(event.target.value);
 
     setSkill(next);
     workerRef.current?.postMessage(`setoption name Skill Level value ${next}`);
-  }, []);
+  };
 
-  const onFlip = useCallback(() => {
+  const onFlip = (): void => {
     setOrientation((prev) => (prev === "white" ? "black" : "white"));
-  }, []);
+  };
+
+  const controlId = id.replace(/\s/g, "_");
+  // Starts on the king's pawn of the side at the bottom, the usual first move
+  const cursorSquare =
+    movedCursorSquare || (orientation === "white" ? "e2" : "e7");
+  // Like a grid, arrows move a square cursor that Enter or Space activates
+  const onBoardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    const { key } = event;
+    const step = CURSOR_STEPS[key];
+
+    if (step) {
+      haltEvent(event);
+
+      const direction = orientation === "white" ? 1 : -1;
+      const file = FILES.indexOf(cursorSquare[0]) + step[0] * direction;
+      const rank = Number(cursorSquare[1]) + step[1] * direction;
+
+      setMovedCursorSquare(
+        `${FILES[Math.min(Math.max(file, 0), 7)]}${Math.min(Math.max(rank, 1), 8)}`
+      );
+    } else if (key === "Enter" || key === " ") {
+      haltEvent(event);
+      squareActionsRef.current?.onSquare(cursorSquare);
+      // Only a mousedown's own click keeps the selection it made
+      justSelectedRef.current = false;
+    } else if (key === "Escape" && selectedSquare) {
+      haltEvent(event);
+      squareActionsRef.current?.clearSelection();
+    }
+  };
+
+  useEffect(() => {
+    const squareEl = boardElRef.current?.querySelector(
+      `[data-square-coord="${cursorSquare}"]`
+    );
+    const piece = chessRef.current?.get(
+      cursorSquare as Parameters<ChessGame["get"]>[0]
+    );
+
+    squareEl?.classList.add("square-cursor");
+
+    if (ready) {
+      setCursorAnnouncement(
+        [
+          cursorSquare,
+          piece && `${sideName(piece.color)} ${PIECE_NAMES[piece.type]}`,
+          selectedSquare === cursorSquare && "selected",
+        ]
+          .filter(Boolean)
+          .join(", ")
+      );
+    }
+
+    return () => squareEl?.classList.remove("square-cursor");
+    // eslint-disable-next-line react/exhaustive-effect-dependencies -- Moves change the piece under the cursor
+  }, [cursorSquare, pgnIndex, ready, selectedSquare, status]);
 
   return (
     <StyledChess>
@@ -741,27 +843,31 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
           <StyledLoading />
         </div>
       )}
-      <nav className="toolbar">
-        <label htmlFor={`chess-mode-${id}`}>Mode</label>
-        <select id={`chess-mode-${id}`} onChange={onModeChange} value={mode}>
+      <nav className="toolbar" role="presentation">
+        <label htmlFor={`chess-mode-${controlId}`}>Mode</label>
+        <select
+          id={`chess-mode-${controlId}`}
+          onChange={onModeChange}
+          value={mode}
+        >
           <option value="hvc">Human vs Computer</option>
           <option value="hvh">Human vs Human</option>
           <option value="cvc">Computer vs Computer</option>
         </select>
-        <label htmlFor={`chess-side-${id}`}>Side</label>
+        <label htmlFor={`chess-side-${controlId}`}>Side</label>
         <select
           disabled={mode !== "hvc"}
-          id={`chess-side-${id}`}
+          id={`chess-side-${controlId}`}
           onChange={onSideChange}
           value={playerSide}
         >
           <option value="w">White</option>
           <option value="b">Black</option>
         </select>
-        <label htmlFor={`chess-skill-${id}`}>Difficulty</label>
+        <label htmlFor={`chess-skill-${controlId}`}>Difficulty</label>
         <select
           disabled={mode === "hvh"}
-          id={`chess-skill-${id}`}
+          id={`chess-skill-${controlId}`}
           onChange={onSkillChange}
           value={skill}
         >
@@ -784,9 +890,26 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
           </button>
         </div>
       </nav>
-      <div className="board-wrap">
+      {/* Busy on the content only, never on an ancestor of the
+          role="status" loader or its announcement may be withheld */}
+      <div aria-busy={!ready || undefined} className="board-wrap">
         <div className="board-frame">
-          <div ref={boardElRef} className="board" />
+          {/* eslint-disable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex -- An application board handles its own keys */}
+          <div
+            ref={boardElRef}
+            aria-label="Chess board"
+            className="board"
+            onBlur={() => setBoardFocused(false)}
+            onFocus={() => setBoardFocused(true)}
+            onKeyDown={onBoardKeyDown}
+            role="application"
+            tabIndex={0}
+          />
+          {/* eslint-enable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */}
+          {/* Only announced while the board has focus, not as it loads or flips */}
+          <div aria-live="polite" className="cursor-announcement">
+            {boardFocused && cursorAnnouncement}
+          </div>
         </div>
       </div>
       {pgnMoves.length > 0 && (
@@ -838,11 +961,14 @@ const Chess: FC<ComponentProcessProps> = ({ id }) => {
           status: true,
           thinking: status.className === "thinking",
         })}
+        role="status"
       >
+        {/* The engine's move only shows on the board, so it's also read out */}
+        {engineMove && <span className="engine-move">{`${engineMove}. `}</span>}
         {status.text}
       </div>
     </StyledChess>
   );
 };
 
-export default memo(Chess);
+export default Chess;

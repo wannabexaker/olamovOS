@@ -1,9 +1,7 @@
-import { useCallback } from "react";
 import useNextFocusable from "components/system/Window/useNextFocusable";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
-import { useProcessesRef } from "hooks/useProcessesRef";
-import { PREVENT_SCROLL } from "utils/constants";
+import { getProcess, useProcessesActions } from "contexts/process";
+import { useSessionActions } from "contexts/session";
+import { focusDesktop, focusWithin } from "utils/keyboard";
 
 type WindowActions = {
   onClose: () => void;
@@ -13,42 +11,49 @@ type WindowActions = {
 
 const useWindowActions = (id: string): WindowActions => {
   const nextFocusableId = useNextFocusable(id);
-  const { setForegroundId, removeFromStack } = useSession();
-  const { closeWithTransition, maximize, minimize } = useProcesses();
-  const processesRef = useProcessesRef();
-  const onMinimize = useCallback(
-    (keepForegroundId?: boolean): void => {
-      minimize(id);
-      if (!keepForegroundId) setForegroundId(nextFocusableId);
-    },
-    [id, minimize, nextFocusableId, setForegroundId]
-  );
-  const onMaximize = useCallback((): void => {
+  const { removeFromStack, setForegroundId, setWindowStates } =
+    useSessionActions();
+  const { closeWithTransition, maximize, minimize } = useProcessesActions();
+  const onMinimize = (keepForegroundId?: boolean): void => {
+    const { componentWindow, minimized } = getProcess(id) || {};
+
+    minimize(id);
+    // Once no longer inert, a restored window gets its focus back, like Windows
+    if (minimized) requestAnimationFrame(() => focusWithin(componentWindow));
+
+    if (!keepForegroundId) {
+      setForegroundId(nextFocusableId);
+      if (!nextFocusableId) focusDesktop();
+    }
+  };
+  const onMaximize = (): void => {
+    const { componentWindow } = getProcess(id) || {};
     const triggerMaximize = (): void => {
-      maximize(id);
+      const maximized = !getProcess(id)?.maximized;
+
+      maximize(id, maximized);
+      setWindowStates((currentWindowStates) => ({
+        ...currentWindowStates,
+        [id]: { ...currentWindowStates[id], maximized },
+      }));
       setForegroundId(id);
-      processesRef.current[id]?.componentWindow?.focus(PREVENT_SCROLL);
+      focusWithin(componentWindow);
     };
-    const [currentAnimation] =
-      processesRef.current[id]?.componentWindow?.getAnimations() || [];
+    // Missing before Chrome 84 & Firefox 75
+    const [currentAnimation] = componentWindow?.getAnimations?.() || [];
 
     if (currentAnimation?.finished) {
       currentAnimation.finished.then(triggerMaximize);
     } else {
       triggerMaximize();
     }
-  }, [id, maximize, processesRef, setForegroundId]);
-  const onClose = useCallback((): void => {
+  };
+  const onClose = (): void => {
     removeFromStack(id);
     closeWithTransition(id);
     setForegroundId(nextFocusableId);
-  }, [
-    closeWithTransition,
-    id,
-    nextFocusableId,
-    removeFromStack,
-    setForegroundId,
-  ]);
+    if (!nextFocusableId) focusDesktop();
+  };
 
   return { onClose, onMaximize, onMinimize };
 };

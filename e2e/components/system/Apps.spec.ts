@@ -7,16 +7,18 @@ import {
 } from "e2e/constants";
 import {
   captureConsoleLogs,
+  closePage,
   desktopEntriesAreVisible,
   disableWallpaper,
   dragFirstDesktopEntryToWindow,
   loadContainerTestApp,
-  windowTitlebarTextIsVisible,
   windowsAreVisible,
+  windowTitlebarTextIsVisible,
 } from "e2e/functions";
 
 test.beforeEach(captureConsoleLogs());
 test.beforeEach(disableWallpaper);
+test.afterEach(closePage);
 
 test.describe("app container", () => {
   test.beforeEach(loadContainerTestApp);

@@ -1,14 +1,15 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import useCanvasContextMenu from "components/apps/StableDiffusion/useCanvasContextMenu";
+import { useRef, useState } from "react";
 import StyledStableDiffusion from "components/apps/StableDiffusion/StyledStableDiffusion";
 import {
   type Prompt,
   type StableDiffusionConfig,
 } from "components/apps/StableDiffusion/types";
+import useCanvasContextMenu from "components/apps/StableDiffusion/useCanvasContextMenu";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import { runStableDiffusion } from "components/system/Desktop/Wallpapers/StableDiffusion";
 import { useWebGPUCheck } from "hooks/useWebGPUCheck";
 import useWorker from "hooks/useWorker";
+import { hasOffscreenCanvasSupport } from "utils/functions";
 
 type WorkerMessage = { data: { message: string; type: string } };
 
@@ -27,19 +28,18 @@ const NO_WEBGPU_SUPPORT = "No WebGPU Support";
 const StableDiffusion: FC<ComponentProcessProps> = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [prompt, setPrompt] = useState<Prompt>(DEFAULT_PROMPT);
-  const generatedAnImage = useRef(false);
-  const supportsOffscreenCanvas = useMemo(
-    () => typeof window !== "undefined" && "OffscreenCanvas" in window,
-    []
-  );
+  const [generatedAnImage, setGeneratedAnImage] = useState(false);
   const sdWorker = useWorker<void>(SD_WORKER);
   const transferedCanvas = useRef(false);
-  const [status, setStatus] = useState<string>(NO_WEBGPU_SUPPORT);
-  const generateImage = useCallback(async () => {
+  const [status, setStatus] = useState("");
+  const [generatedPrompt, setGeneratedPrompt] = useState("");
+  const generateImage = async (): Promise<void> => {
     if (canvasRef.current) {
       const config: StableDiffusionConfig = { prompts: [prompt] };
 
-      if (supportsOffscreenCanvas && sdWorker.current) {
+      setGeneratedPrompt(prompt[0]);
+
+      if (hasOffscreenCanvasSupport() && sdWorker.current) {
         if (transferedCanvas.current) {
           sdWorker.current.postMessage({ config });
         } else {
@@ -63,25 +63,22 @@ const StableDiffusion: FC<ComponentProcessProps> = () => {
         setStatus("");
       }
 
-      generatedAnImage.current = true;
+      setGeneratedAnImage(true);
     }
-  }, [prompt, sdWorker, supportsOffscreenCanvas]);
+  };
   const hasWebGPU = useWebGPUCheck();
   const { onContextMenuCapture } = useCanvasContextMenu(
     canvasRef,
     prompt[0],
-    generatedAnImage.current && !status
+    generatedAnImage && !status
   );
-
-  useEffect(() => {
-    if (hasWebGPU && status === NO_WEBGPU_SUPPORT) setStatus("");
-  }, [hasWebGPU, status]);
 
   return (
     <StyledStableDiffusion>
-      <nav>
+      <nav role="presentation">
         <div className="prompts">
           <textarea
+            aria-label="Input Prompt"
             defaultValue={prompt[0]}
             onChange={({ target }) =>
               setPrompt(([, negativePrompt]) => [
@@ -92,6 +89,7 @@ const StableDiffusion: FC<ComponentProcessProps> = () => {
             placeholder="Input Prompt"
           />
           <textarea
+            aria-label="Negative Prompt"
             defaultValue={prompt[1]}
             onChange={({ target }) =>
               setPrompt(([positivePrompt]) => [
@@ -115,14 +113,22 @@ const StableDiffusion: FC<ComponentProcessProps> = () => {
       <div className="image">
         <canvas
           ref={canvasRef}
+          // Busy only while generating, and never on an ancestor of the
+          // role="status" region or its announcements may be withheld
+          aria-busy={Boolean(status) || undefined}
+          aria-label={generatedPrompt || "Generated image"}
           height={512}
           onContextMenuCapture={onContextMenuCapture}
+          role="img"
+          tabIndex={generatedPrompt ? 0 : undefined}
           width={512}
         />
-        {status && <div className="status">{status}</div>}
+        <div className="status" role="status">
+          {hasWebGPU ? status : NO_WEBGPU_SUPPORT}
+        </div>
       </div>
     </StyledStableDiffusion>
   );
 };
 
-export default memo(StableDiffusion);
+export default StableDiffusion;

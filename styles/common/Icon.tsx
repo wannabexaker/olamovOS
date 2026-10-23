@@ -1,6 +1,10 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { basename } from "path";
+import { useEffect, useState } from "react";
 import styled from "styled-components";
-import { SUPPORTED_ICON_PIXEL_RATIOS } from "utils/constants";
+import {
+  MAX_RES_ICON_OVERRIDE,
+  SUPPORTED_ICON_PIXEL_RATIOS,
+} from "utils/constants";
 import {
   cleanUpBufferUrl,
   createFallbackSrcSet,
@@ -51,61 +55,75 @@ const StyledIcon = styled.img.attrs<StyledIconProps>(
   visibility: ${({ $loaded }) => ($loaded ? "visible" : "hidden")};
 `;
 
+const supportedPixelRatios = new Map<string, number[]>();
+
+const getSupportedPixelRatios = (
+  imagePath: string,
+  extension: string
+): number[] => {
+  if (supportedPixelRatios.has(imagePath)) {
+    const cachedEntry = supportedPixelRatios.get(imagePath);
+
+    if (cachedEntry) return cachedEntry;
+  }
+
+  let ratios = SUPPORTED_ICON_PIXEL_RATIOS;
+  const iconOverride = MAX_RES_ICON_OVERRIDE[basename(imagePath, extension)];
+
+  if (iconOverride) {
+    const [expectedSize, maxIconSize] = iconOverride;
+
+    if (expectedSize && maxIconSize) {
+      const maxRatio = Math.floor(maxIconSize / expectedSize);
+
+      ratios = SUPPORTED_ICON_PIXEL_RATIOS.filter((ratio) => ratio <= maxRatio);
+    }
+  }
+
+  supportedPixelRatios.set(imagePath, ratios);
+
+  return ratios;
+};
+
 const Icon: FCWithRef<
   HTMLImageElement,
   IconProps & Omit<React.ImgHTMLAttributes<HTMLImageElement>, "src">
 > = ({
+  alt = "",
   displaySize = 0,
   imgSize = 0,
+  onLoad,
   ref,
   singleSrc = false,
   src = "",
   ...componentProps
 }) => {
   const [loaded, setLoaded] = useState(false);
-  const isDynamic = isDynamicIcon(src);
-  const imgSrc = useMemo(
-    () =>
-      isDynamic && !supportsWebp()
-        ? src.replace(getExtension(src), ".png")
-        : src,
-    [isDynamic, src]
-  );
-  const srcExt = getExtension(imgSrc);
-  const dimensionProps = useMemo(() => {
-    const size = displaySize > imgSize ? imgSize : displaySize || imgSize;
-    const $offset = displaySize > imgSize ? `${displaySize - imgSize}px` : 0;
-
-    return {
-      $height: size,
-      $offset,
-      $width: size,
-    };
-  }, [displaySize, imgSize]);
+  const size = displaySize > imgSize ? imgSize : displaySize || imgSize;
+  const dimensionProps = {
+    $height: size,
+    $offset: displaySize > imgSize ? `${displaySize - imgSize}px` : 0,
+    $width: size,
+  };
   const [failedUrls, setFailedUrls] = useState<string[]>([]);
-  const onError: React.ReactEventHandler<HTMLImageElement> = useCallback(
-    ({ target }) => {
-      const { currentSrc = "" } = (target as HTMLImageElement) || {};
+  const onError: React.ReactEventHandler<HTMLImageElement> = ({ target }) => {
+    const { currentSrc = "" } = (target as HTMLImageElement) || {};
+    let pathname = "";
 
-      try {
-        const { pathname } = new URL(currentSrc);
+    try {
+      pathname = new URL(currentSrc).pathname;
+    } catch {
+      // Ignore failure to log failed url
+    }
 
-        if (pathname && !failedUrls.includes(pathname)) {
-          setFailedUrls((currentFailedUrls) => [
-            ...currentFailedUrls,
-            pathname,
-          ]);
-        }
-      } catch {
-        // Ignore failure to log failed url
-      }
-    },
-    [failedUrls]
-  );
-  const onLoad: React.ReactEventHandler<HTMLImageElement> = useCallback(
-    () => setLoaded(true),
-    []
-  );
+    if (pathname && !failedUrls.includes(pathname)) {
+      setFailedUrls((currentFailedUrls) => [...currentFailedUrls, pathname]);
+    }
+  };
+  const onLoadHandler: React.ReactEventHandler<HTMLImageElement> = (event) => {
+    setLoaded(true);
+    onLoad?.(event);
+  };
 
   useEffect(
     () => () => {
@@ -114,11 +132,16 @@ const Icon: FCWithRef<
     [loaded, src]
   );
 
+  const isDynamic = isDynamicIcon(src);
+  const imgSrc =
+    isDynamic && !supportsWebp() ? src.replace(getExtension(src), ".png") : src;
+  const srcExt = getExtension(imgSrc);
+
   return (
     <picture>
       {!singleSrc &&
         isDynamic &&
-        SUPPORTED_ICON_PIXEL_RATIOS.map((ratio) => {
+        getSupportedPixelRatios(imgSrc, srcExt).map((ratio) => {
           const srcSet = imageSrc(imgSrc, imgSize, ratio, srcExt);
           const mediaRatio = ratio - 0.99;
 
@@ -146,8 +169,9 @@ const Icon: FCWithRef<
       <StyledIcon
         ref={ref}
         $loaded={loaded}
+        alt={alt}
         onError={onError}
-        onLoad={onLoad}
+        onLoad={onLoadHandler}
         src={
           isDynamic ? imageSrc(imgSrc, imgSize, 1, srcExt) : src || undefined
         }
@@ -166,4 +190,4 @@ const Icon: FCWithRef<
   );
 };
 
-export default memo(Icon);
+export default Icon;

@@ -1,12 +1,12 @@
-import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
-import { ACCESSIBILITY_EXCEPTION_IDS } from "e2e/constants";
+import { test } from "@playwright/test";
 import {
   backgroundCanvasMaybeIsVisible,
   captureConsoleLogs,
   clockCanvasMaybeIsVisible,
+  closePage,
   desktopEntriesAreVisible,
   loadApp,
+  scanPasses,
   startButtonIsVisible,
   taskbarIsVisible,
 } from "e2e/functions";
@@ -18,12 +18,6 @@ test.beforeEach(taskbarIsVisible);
 test.beforeEach(startButtonIsVisible);
 test.beforeEach(clockCanvasMaybeIsVisible);
 test.beforeEach(backgroundCanvasMaybeIsVisible);
+test.afterEach(closePage);
 
-test("can pass accessibility scan", async ({ page }) =>
-  expect(
-    (
-      await new AxeBuilder({ page })
-        .disableRules(ACCESSIBILITY_EXCEPTION_IDS)
-        .analyze()
-    ).violations
-  ).toEqual([]));
+test("can pass accessibility scan", async ({ page }) => scanPasses(page));

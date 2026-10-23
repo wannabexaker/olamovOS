@@ -37,8 +37,8 @@ export const setMasterAudio = (volume: number, muted: boolean): void => {
 };
 
 type AudioWindow = Window & {
-  AudioContext?: typeof AudioContext;
   __olamovAudioPatched?: boolean;
+  AudioContext?: typeof AudioContext;
   webkitAudioContext?: typeof AudioContext;
 };
 
@@ -54,9 +54,9 @@ const patchWindow = (win: AudioWindow): void => {
     this: unknown,
     ...args: unknown[]
   ): AudioContext {
-    const context = new (Original as new (
-      ...ctorArgs: unknown[]
-    ) => AudioContext)(...args);
+    const context = new (
+      Original as new (...ctorArgs: unknown[]) => AudioContext
+    )(...args);
 
     try {
       const realDestination = context.destination;
@@ -100,7 +100,7 @@ export const patchAudioContextOnce = (): void => {
   if (patched || typeof window === "undefined") return;
   patched = true;
 
-  patchWindow(window as AudioWindow);
+  patchWindow(window);
 };
 
 // Apps that render into an isolated <iframe> (EmulatorJS, Commodore 64) have
@@ -108,8 +108,10 @@ export const patchAudioContextOnce = (): void => {
 // patch never touches. Patch that window too — before the emulator boots — so
 // the global volume slider reaches it. Guarded per-window so a reused frame is
 // not double-patched.
-export const patchAudioContextForWindow = (win: Window | undefined): void => {
-  const frameWindow = win as AudioWindow | undefined;
+export const patchAudioContextForWindow = (
+  win: AudioWindow | undefined
+): void => {
+  const frameWindow = win;
 
   if (!frameWindow || frameWindow.__olamovAudioPatched) return;
   frameWindow.__olamovAudioPatched = true;

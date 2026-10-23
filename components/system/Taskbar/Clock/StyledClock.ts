@@ -7,22 +7,26 @@ type StyledClockProps = {
   $width: number;
 };
 
-const StyledClock = styled.div<StyledClockProps>`
+const StyledClock = styled.button.attrs({
+  type: "button",
+})<StyledClockProps>`
+  background-color: transparent;
   border-left: 1px solid ${({ theme }) => theme.colors.taskbar.bevelBottom};
   box-shadow: inset 1px 0 0 ${({ theme }) => theme.colors.taskbar.bevelTop};
   color: ${({ theme }) => theme.colors.text};
   display: flex;
+  font-family: inherit;
   font-size: ${({ theme }) => theme.sizes.clock.fontSize};
   height: 100%;
   line-height: ${TASKBAR_HEIGHT - CLOCK_TEXT_HEIGHT_OFFSET}px;
-  max-width: ${({ theme, $width }) =>
+  max-width: ${({ $width, theme }) =>
     `calc(${$width}px + ${theme.sizes.clock.padding * 2}px)`};
-  min-width: ${({ theme, $width }) =>
+  min-width: ${({ $width, theme }) =>
     `calc(${$width}px + ${theme.sizes.clock.padding * 2}px)`};
   padding: ${({ theme }) => `0 ${theme.sizes.clock.padding}px`};
   place-content: center;
   position: absolute;
-  right: ${({ theme, $hasAI }) =>
+  right: ${({ $hasAI, theme }) =>
     $hasAI ? theme.sizes.taskbar.ai.buttonWidth : 0};
   white-space: nowrap;
 

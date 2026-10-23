@@ -1,207 +1,208 @@
+import { type Filter } from "nostr-tools/filter";
 import {
-  createContext,
-  memo,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-import { type Event } from "nostr-tools";
-import { useHistoryContext } from "components/apps/Messenger/HistoryContext";
+  DirectMessageRelaysList,
+  EncryptedDirectMessage,
+  GiftWrap,
+} from "nostr-tools/kinds";
+import { type Event } from "nostr-tools/pure";
+import { createContext, useContext, useRef, useState } from "react";
 import {
-  CONTACTS_ALLOWLIST_KEY,
-  CONTACTS_BLOCKLIST_KEY,
-  SPAM_RATE_LIMIT_PER_HOUR,
+  BASE_RW_RELAYS,
+  MAX_GIFT_WRAP_AGE_IN_SECONDS,
+  MESSAGES_DEBOUNCE_MS,
 } from "components/apps/Messenger/constants";
 import {
-  getKeyFromTags,
-  getMessages,
-  groupChatEvents,
+  createMessage,
+  descCreatedAt,
+  getContactKey,
+  getUnixTime,
+  groupMessages,
+  unwrapMessage,
 } from "components/apps/Messenger/functions";
+import {
+  type TimeScale,
+  useHistoryContext,
+} from "components/apps/Messenger/HistoryContext";
 import { useNostrEvents } from "components/apps/Messenger/hooks";
-import { type ChatEvents } from "components/apps/Messenger/types";
+import { useNostr } from "components/apps/Messenger/NostrContext";
+import {
+  type ChatMessages,
+  type DirectMessage,
+} from "components/apps/Messenger/types";
+import { MILLISECONDS_IN_DAY, MILLISECONDS_IN_SECOND } from "utils/constants";
+import { toSorted } from "utils/functions";
 
-type MessageData = {
-  allEventsReceived: boolean;
-  messages: ChatEvents;
+const TIME_SCALE_DAYS: Record<TimeScale, number> = {
+  infinite: 0,
+  month: 30,
+  trimester: 90,
+  week: 7,
+};
+
+// Reads the clock, so as a call the compiler caches it per timeScale instead
+// of a new `since` every render resubscribing
+const getMessageFilter = (
+  publicKey: string,
+  timeScale: TimeScale
+): Filter[] => {
+  const since = TIME_SCALE_DAYS[timeScale]
+    ? getUnixTime() -
+      (TIME_SCALE_DAYS[timeScale] * MILLISECONDS_IN_DAY) /
+        MILLISECONDS_IN_SECOND
+    : 0;
+
+  return [
+    {
+      "#p": [publicKey],
+      kinds: [GiftWrap],
+      since: Math.max(0, since - MAX_GIFT_WRAP_AGE_IN_SECONDS),
+    },
+    { "#p": [publicKey], kinds: [EncryptedDirectMessage], since },
+    { authors: [publicKey], kinds: [EncryptedDirectMessage], since },
+  ];
 };
 
 type MessagesState = {
-  events: Event[];
+  messages: DirectMessage[];
   publicKey: string;
-  sendingEvent: (event: Event) => void;
+  sendMessage: (
+    recipient: string,
+    content: string,
+    legacy: boolean
+  ) => Promise<void>;
 };
 
-const MessageContext = createContext({
-  events: [],
-  publicKey: "",
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  sendingEvent: () => {},
-} as MessagesState);
+const MessageContext = createContext({} as MessagesState);
 
 export const useMessageContext = (): MessagesState =>
   useContext(MessageContext);
 
-export const useMessages = (recipientPublicKey: string): MessageData => {
-  const { outgoingEvents } = useHistoryContext();
-  const { events, publicKey } = useMessageContext();
-  const chatEvents = useNostrEvents(getMessages(publicKey, recipientPublicKey));
-  const [messages, setMessages] = useState<ChatEvents>([]);
+export const useMessages = (recipientPublicKey: string): ChatMessages => {
+  const { messages, publicKey } = useMessageContext();
 
-  useEffect(() => {
-    const filteredEvents = [
-      ...chatEvents,
-      ...events.filter(({ pubkey, tags }) => {
-        const isSender = pubkey === recipientPublicKey;
-        const isRecipient = getKeyFromTags(tags) === recipientPublicKey;
-
-        return recipientPublicKey === publicKey
-          ? isSender && isRecipient
-          : isSender || isRecipient;
-      }),
-    ].filter(
-      (event, index, currentEvents) =>
-        currentEvents.findIndex(({ id }) => id === event.id) === index
-    );
-    const currentMessages = groupChatEvents(filteredEvents);
-
-    if (
-      currentMessages.length !== messages.length ||
-      filteredEvents.length !==
-        messages.reduce<Event[]>(
-          (allMessages, [, moreMessages]) => [...allMessages, ...moreMessages],
-          []
-        ).length
-    ) {
-      setMessages(currentMessages);
-    }
-  }, [chatEvents, events, messages, publicKey, recipientPublicKey]);
-
-  return {
-    allEventsReceived: useMemo(
-      () =>
-        !outgoingEvents.some(
-          ({ tags }) => getKeyFromTags(tags) === recipientPublicKey
-        ),
-      [outgoingEvents, recipientPublicKey]
-    ),
-    messages,
-  };
+  return groupMessages(
+    messages.filter(({ pubkey, recipient }) =>
+      recipientPublicKey === publicKey
+        ? pubkey === publicKey && recipient === publicKey
+        : pubkey === recipientPublicKey || recipient === recipientPublicKey
+    )
+  );
 };
 
-type MessageProviderProps = {
-  publicKey: string;
-  since?: number;
+// Reply with NIP-04 only to people whose client still sends it
+export const useIsLegacyChat = (recipientPublicKey: string): boolean => {
+  const { messages } = useMessageContext();
+
+  const [lastReceived] = toSorted(
+    messages.filter(({ pubkey }) => pubkey === recipientPublicKey),
+    descCreatedAt
+  );
+
+  return lastReceived?.legacy === true;
 };
 
-export const MessageProvider = memo<FC<MessageProviderProps>>(
-  ({ children, publicKey, since }) => {
-    const chatEvents = useNostrEvents(getMessages(publicKey, "", since));
-    const { outgoingEvents, setOutgoingEvents } = useHistoryContext();
-    const sendingEvent = useCallback(
-      (event: Event) =>
-        setOutgoingEvents((currentOutgoingEvents) => [
-          ...currentOutgoingEvents,
-          event,
-        ]),
-      [setOutgoingEvents]
-    );
-    const [events, setEvents] = useState<Event[]>(chatEvents);
+export const MessageProvider: FC = ({ children }) => {
+  const { publish, query, signer } = useNostr();
+  const { publicKey } = signer;
+  const [messagesById, setMessagesById] = useState<
+    Record<string, DirectMessage>
+  >({});
+  const { blockedKeys, deletedChats, timeScale } = useHistoryContext();
+  const pendingMessages = useRef<DirectMessage[]>([]);
+  const flushTimer = useRef(0);
+  const dmRelays = useRef<Record<string, Promise<string[]>>>({});
+  const filter = getMessageFilter(publicKey, timeScale);
+  const onEvent = (event: Event): Promise<void> =>
+    unwrapMessage(signer, event).then((message) => {
+      if (!message) return;
 
-    const filterSpam = useCallback(
-      (eventList: Event[]): Event[] => {
-        const blocklist = new Set<string>(
-          (() => {
-            try {
-              return JSON.parse(
-                localStorage.getItem(CONTACTS_BLOCKLIST_KEY) || "[]"
-              ) as string[];
-            } catch {
-              return [];
-            }
-          })()
-        );
-        const allowlist = new Set<string>(
-          (() => {
-            try {
-              return JSON.parse(
-                localStorage.getItem(CONTACTS_ALLOWLIST_KEY) || "[]"
-              ) as string[];
-            } catch {
-              return [];
-            }
-          })()
-        );
-        const counter: Record<string, number[]> = (() => {
-          try {
-            return JSON.parse(
-              localStorage.getItem("nostr_rate_counter") || "{}"
-            ) as Record<string, number[]>;
-          } catch {
-            return {};
-          }
-        })();
-        const now = Date.now();
-        const hourAgo = now - 60 * 60 * 1000;
+      pendingMessages.current.push(message);
+      if (!flushTimer.current) {
+        flushTimer.current = window.setTimeout(() => {
+          const newMessages = pendingMessages.current.splice(0);
 
-        const filtered = eventList.filter(({ pubkey }) => {
-          if (blocklist.has(pubkey)) return false;
-          if (allowlist.has(pubkey) || pubkey === publicKey) return true;
+          flushTimer.current = 0;
+          setMessagesById((currentMessages) => {
+            const updatedMessages = { ...currentMessages };
 
-          counter[pubkey] = (counter[pubkey] || []).filter(
-            (t: number) => t > hourAgo
-          );
+            newMessages.forEach((newMessage) => {
+              if (!updatedMessages[newMessage.id]) {
+                updatedMessages[newMessage.id] = newMessage;
+              }
+            });
 
-          if (counter[pubkey].length >= SPAM_RATE_LIMIT_PER_HOUR) return false;
+            return updatedMessages;
+          });
+        }, MESSAGES_DEBOUNCE_MS);
+      }
+    });
+  const getDmRelays = (recipient: string): Promise<string[]> => {
+    if (!dmRelays.current[recipient]) {
+      dmRelays.current[recipient] = query({
+        authors: [recipient],
+        kinds: [DirectMessageRelaysList],
+      }).then((events) => {
+        const [latest] = toSorted(events, descCreatedAt);
+        const urls = (latest?.tags || [])
+          .filter(([tag, url]) => tag === "relay" && url?.startsWith("wss://"))
+          .map(([, url]) => url);
 
-          counter[pubkey].push(now);
-
-          return true;
-        });
-
-        localStorage.setItem("nostr_rate_counter", JSON.stringify(counter));
-
-        return filtered;
-      },
-      [publicKey]
-    );
-
-    useEffect(() => {
-      const filteredChatEvents = filterSpam(chatEvents);
-      const currentEvents = [
-        ...filteredChatEvents,
-        ...outgoingEvents.filter(
-          (event) => !filteredChatEvents.some(({ id }) => id === event.id)
-        ),
-      ];
-
-      if (currentEvents.length !== events.length) setEvents(currentEvents);
-    }, [chatEvents, events, filterSpam, outgoingEvents]);
-
-    useEffect(() => {
-      outgoingEvents.forEach((message) => {
-        if (chatEvents.some(({ id }) => id === message.id)) {
-          setOutgoingEvents((currentOutgoingEvents) =>
-            currentOutgoingEvents.filter(({ id }) => id !== message.id)
-          );
-        }
+        return urls.length > 0 ? urls : BASE_RW_RELAYS;
       });
-    }, [chatEvents, outgoingEvents, setOutgoingEvents]);
+    }
 
-    return (
-      <MessageContext
-        value={useMemo(
-          () => ({
-            events,
-            publicKey,
-            sendingEvent,
-          }),
-          [events, publicKey, sendingEvent]
-        )}
-      >
-        {children}
-      </MessageContext>
+    return dmRelays.current[recipient];
+  };
+  const sendMessage = async (
+    recipient: string,
+    content: string,
+    legacy: boolean
+  ): Promise<void> => {
+    const { message, recipientEvent, selfEvent } = await createMessage(
+      signer,
+      recipient,
+      content,
+      legacy
     );
-  }
-);
+    const setStatus = (status?: DirectMessage["status"]): void =>
+      setMessagesById((currentMessages) => ({
+        ...currentMessages,
+        [message.id]: { ...message, status },
+      }));
+
+    setStatus("sending");
+
+    (async () => {
+      const [sent] = await Promise.all([
+        publish(
+          recipientEvent,
+          legacy ? BASE_RW_RELAYS : await getDmRelays(recipient)
+        ),
+        selfEvent && publish(selfEvent),
+      ]);
+
+      setStatus(sent ? undefined : "failed");
+    })();
+  };
+
+  useNostrEvents({ filter, onEvent });
+
+  return (
+    <MessageContext
+      value={{
+        messages: Object.values(messagesById).filter((message) => {
+          const key = getContactKey(message, publicKey);
+
+          return (
+            !blockedKeys.includes(key) &&
+            (deletedChats[key] ?? -1) < message.created_at
+          );
+        }),
+        publicKey,
+        sendMessage,
+      }}
+    >
+      {children}
+    </MessageContext>
+  );
+};

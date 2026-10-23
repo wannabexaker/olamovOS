@@ -1,4 +1,3 @@
-import { memo } from "react";
 import styled from "styled-components";
 
 const StyledComponentError = styled.div`
@@ -15,7 +14,7 @@ const StyledComponentError = styled.div`
 const ERROR_MESSAGE = "Error occurred within component.";
 
 const ComponentError: FC = () => (
-  <StyledComponentError>{ERROR_MESSAGE}</StyledComponentError>
+  <StyledComponentError role="alert">{ERROR_MESSAGE}</StyledComponentError>
 );
 
-export default memo(ComponentError);
+export default ComponentError;

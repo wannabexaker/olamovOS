@@ -1,19 +1,16 @@
 import { basename, dirname, extname, join } from "path";
-import { useTheme } from "styled-components";
+import { m as motion } from "motion/react";
+import dynamic from "next/dynamic";
 import {
+  // eslint-disable-next-line no-restricted-imports -- FileManager re-maps every entry on any file, focus or selection change
   memo,
-  useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
-import dynamic from "next/dynamic";
-import { m as motion } from "motion/react";
-import { type Columns } from "components/system/Files/FileManager/Columns/constants";
-import StyledFigure from "components/system/Files/FileEntry/StyledFigure";
-import SubIcons from "components/system/Files/FileEntry/SubIcons";
+import { useTheme } from "styled-components";
 import {
   getCachedIconUrl,
   getCachedShortcut,
@@ -21,23 +18,28 @@ import {
   getFileType,
   getTextWrapData,
 } from "components/system/Files/FileEntry/functions";
+import StyledFigure from "components/system/Files/FileEntry/StyledFigure";
+import SubIcons from "components/system/Files/FileEntry/SubIcons";
 import useFile from "components/system/Files/FileEntry/useFile";
 import useFileContextMenu from "components/system/Files/FileEntry/useFileContextMenu";
 import useFileInfo from "components/system/Files/FileEntry/useFileInfo";
 import FileManager from "components/system/Files/FileManager";
+import { type Columns } from "components/system/Files/FileManager/Columns/constants";
+import { type FileStat } from "components/system/Files/FileManager/functions";
 import { isSelectionIntersecting } from "components/system/Files/FileManager/Selection/functions";
 import { type SelectionRect } from "components/system/Files/FileManager/Selection/useSelection";
-import { type FileStat } from "components/system/Files/FileManager/functions";
 import useFileDrop from "components/system/Files/FileManager/useFileDrop";
 import { type FocusEntryFunctions } from "components/system/Files/FileManager/useFocusableEntries";
 import { type FileActions } from "components/system/Files/FileManager/useFolder";
 import {
-  type FileManagerViewNames,
   FileEntryIconSize,
+  type FileManagerViewNames,
 } from "components/system/Files/Views";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
+import { useFileSystemActions, useFs, usePasteList } from "contexts/fileSystem";
+import { UNKNOWN_SIZE } from "contexts/fileSystem/core";
+import { useProcessesActions } from "contexts/process";
 import useDoubleClick from "hooks/useDoubleClick";
+import { useIsVisible } from "hooks/useIsVisible";
 import Button from "styles/common/Button";
 import Icon from "styles/common/Icon";
 import {
@@ -68,9 +70,8 @@ import {
   isYouTubeUrl,
   preloadImage,
 } from "utils/functions";
+import { isKeyboardNavigating, whenFocusLost } from "utils/keyboard";
 import { spotlightEffect } from "utils/spotlightEffect";
-import { useIsVisible } from "hooks/useIsVisible";
-import { UNKNOWN_SIZE } from "contexts/fileSystem/core";
 
 const ColumnRow = dynamic(
   () => import("components/system/Files/FileEntry/ColumnRow")
@@ -89,11 +90,10 @@ type FileEntryProps = {
   fileActions: FileActions;
   fileManagerId?: string;
   fileManagerRef: React.RefObject<HTMLOListElement | null>;
-  focusFunctions: FocusEntryFunctions;
   focusedEntries: string[];
+  focusFunctions: FocusEntryFunctions;
   hasNewFolderIcon?: boolean;
   hideShortcutIcon?: boolean;
-  initiallyExpanded?: boolean;
   isDesktop?: boolean;
   isHeading?: boolean;
   isLoadingFileManager: boolean;
@@ -142,8 +142,8 @@ const FileEntry: FC<FileEntryProps> = ({
   fileManagerRef,
   focusedEntries,
   focusFunctions,
+  hasNewFolderIcon,
   hideShortcutIcon,
-  initiallyExpanded,
   isDesktop,
   isHeading,
   isLoadingFileManager,
@@ -155,14 +155,13 @@ const FileEntry: FC<FileEntryProps> = ({
   selectionRect,
   setRenaming,
   stats,
-  hasNewFolderIcon,
   view,
 }) => {
   const { blurEntry, focusEntry } = focusFunctions;
-  const { url: changeUrl } = useProcesses();
+  const { url: changeUrl } = useProcessesActions();
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const isVisible = useIsVisible(buttonRef, fileManagerRef, isDesktop);
-  const isDirectory = useMemo(() => stats.isDirectory(), [stats]);
+  const isDirectory = stats.isDirectory();
   const [{ comment, getIcon, icon, pid, subIcons, url }, setInfo] = useFileInfo(
     path,
     isDirectory,
@@ -173,42 +172,29 @@ const FileEntry: FC<FileEntryProps> = ({
   const {
     createPath,
     exists,
-    fs,
     mkdirRecursive,
-    pasteList,
     readdir,
     stat,
     updateFolder,
     writeFile,
-  } = useFileSystem();
-  const [showInFileManager, setShowInFileManager] = useState(
-    Boolean(initiallyExpanded)
-  );
+  } = useFileSystemActions();
+  const fs = useFs();
+  const pasteList = usePasteList();
+  const [showInFileManager, setShowInFileManager] = useState(false);
   const { formats, sizes } = useTheme();
-  const listView = useMemo(() => view === "list", [view]);
-  const detailsView = useMemo(() => view === "details", [view]);
-  const fileName = useMemo(() => basename(path), [path]);
-  const urlExt = useMemo(
-    () => (isDirectory ? "" : getExtension(url)),
-    [isDirectory, url]
-  );
-  const isYTUrl = useMemo(() => Boolean(url) && isYouTubeUrl(url), [url]);
-  const isDynamicIcon = useMemo(
-    () =>
-      IMAGE_FILE_EXTENSIONS.has(urlExt) ||
-      VIDEO_FILE_EXTENSIONS.has(urlExt) ||
-      isYTUrl,
-    [isYTUrl, urlExt]
-  );
-  const isOnlyFocusedEntry = useMemo(
-    () => focusedEntries.length === 1 && focusedEntries[0] === fileName,
-    [fileName, focusedEntries]
-  );
-  const extension = useMemo(() => getExtension(path), [path]);
-  const isShortcut = useMemo(
-    () => extension === SHORTCUT_EXTENSION,
-    [extension]
-  );
+  const listView = view === "list";
+  const detailsView = view === "details";
+  const fileName = basename(path);
+  const urlExt = isDirectory ? "" : getExtension(url);
+  const isYTUrl = Boolean(url) && isYouTubeUrl(url);
+  const isDynamicIcon =
+    IMAGE_FILE_EXTENSIONS.has(urlExt) ||
+    VIDEO_FILE_EXTENSIONS.has(urlExt) ||
+    isYTUrl;
+  const isOnlyFocusedEntry =
+    focusedEntries.length === 1 && focusedEntries[0] === fileName;
+  const extension = getExtension(path);
+  const isShortcut = extension === SHORTCUT_EXTENSION;
   const directory = isShortcut ? url : path;
   const fileDrop = useFileDrop({
     callback: async (fileDropName, data) => {
@@ -226,24 +212,22 @@ const FileEntry: FC<FileEntryProps> = ({
     },
     directory,
   });
-  const openInFileExplorer = useMemo(() => pid === "FileExplorer", [pid]);
-  const truncatedName = useMemo(
-    () =>
-      truncateName(
-        name,
-        sizes.fileEntry.fontSize,
-        formats.systemFont,
-        sizes.fileEntry[
-          listView ? "maxListTextDisplayWidth" : "maxIconTextDisplayWidth"
-        ]
-      ),
-    [formats.systemFont, listView, name, sizes.fileEntry]
+  const openInFileExplorer = pid === "FileExplorer";
+  const truncatedName = truncateName(
+    name,
+    sizes.fileEntry.fontSize,
+    formats.systemFont,
+    sizes.fileEntry[
+      listView ? "maxListTextDisplayWidth" : "maxIconTextDisplayWidth"
+    ]
   );
   const iconRef = useRef<HTMLImageElement | null>(null);
+  const [loadedIcon, setLoadedIcon] = useState("");
+  const onIconLoad = (): void => setLoadedIcon(icon);
   const isIconCached = useRef(false);
   const isDynamicIconLoaded = useRef(false);
   const getIconAbortController = useRef<AbortController>(undefined);
-  const createTooltip = useCallback(async (): Promise<string> => {
+  const createTooltip = async (): Promise<string> => {
     if (isDirectory) return "";
 
     if (isShortcut) {
@@ -272,19 +256,9 @@ const FileEntry: FC<FileEntryProps> = ({
     const dateModified = getDateModified(path, fullStats, formats.dateModified);
 
     return `${toolTip}\nDate modified: ${dateModified}`;
-  }, [
-    comment,
-    extension,
-    formats.dateModified,
-    isDirectory,
-    isShortcut,
-    path,
-    stat,
-    stats,
-    url,
-  ]);
+  };
   const [tooltip, setTooltip] = useState<string>();
-  const doubleClickHandler = useCallback(() => {
+  const doubleClickHandler = (): void => {
     if (
       openInFileExplorer &&
       fileManagerId &&
@@ -298,32 +272,14 @@ const FileEntry: FC<FileEntryProps> = ({
     } else {
       openFile(pid, isDynamicIcon ? undefined : icon);
     }
-  }, [
-    blurEntry,
-    changeUrl,
-    fileManagerId,
-    icon,
-    isDynamicIcon,
-    listView,
-    openFile,
-    openInFileExplorer,
-    pid,
-    url,
-    urlExt,
-  ]);
-  const showColumn = useMemo(
-    () => isVisible && columns !== undefined && detailsView,
-    [columns, detailsView, isVisible]
-  );
-  const columnWidth = useMemo(
-    () =>
-      showColumn && columns
-        ? columns.name.width - sizes.fileManager.detailsStartPadding
-        : 0,
-    [columns, showColumn, sizes.fileManager.detailsStartPadding]
-  );
+  };
+  const showColumn = isVisible && columns !== undefined && detailsView;
+  const columnWidth =
+    showColumn && columns
+      ? columns.name.width - sizes.fileManager.detailsStartPadding
+      : 0;
   const preloadedImages = useRef(false);
-  const preloadImages = useCallback(() => {
+  const preloadImages = (): void => {
     if (preloadedImages.current) return;
     preloadedImages.current = true;
 
@@ -332,27 +288,23 @@ const FileEntry: FC<FileEntryProps> = ({
         .map((file) => getCachedShortcut(join(path, file)) || {})
         .forEach(({ icon: image }) => image && preloadImage(image))
     );
-  }, [path, readdir]);
-  const onMouseOverButton = useCallback(() => {
+  };
+  const onMouseOverButton = (): void => {
     if (listView && isDirectory) preloadImages();
     createTooltip().then(setTooltip);
-  }, [createTooltip, isDirectory, listView, preloadImages]);
-  const lockWidthStyle = useMemo(
-    () => ({ maxWidth: columnWidth, minWidth: columnWidth }),
-    [columnWidth]
-  );
-  const renameFile = useCallback(
-    (origPath: string, newName?: string) => {
-      fileActions.renameFile(origPath, newName);
-      setRenaming("");
-    },
-    [fileActions, setRenaming]
-  );
+  };
+  const lockWidthStyle = { maxWidth: columnWidth, minWidth: columnWidth };
+  const renameFile = (origPath: string, newName?: string): void => {
+    fileActions.renameFile(origPath, newName);
+    setRenaming("");
+  };
 
   useEffect(() => {
     if (
       !isLoadingFileManager &&
       isVisible &&
+      // Show the default icon before swapping in a cached/generated one
+      loadedIcon &&
       !isIconCached.current &&
       (!detailsView || EXTENSIONS_WITH_ICON.has(urlExt))
     ) {
@@ -416,21 +368,23 @@ const FileEntry: FC<FileEntryProps> = ({
                   const htmlToImage = await getHtmlToImage();
                   let iconCanvas: HTMLCanvasElement | undefined;
 
-                  try {
-                    iconCanvas = await htmlToImage?.toCanvas(iconRef.current, {
-                      height,
-                      skipAutoScale: true,
-                      style: {
-                        objectPosition: height
-                          ? "top"
-                          : width
-                            ? "left"
-                            : undefined,
-                      },
-                      width,
-                    });
-                  } catch {
-                    // Ignore failure to capture
+                  if (htmlToImage) {
+                    const objectPosition = height
+                      ? "top"
+                      : width
+                        ? "left"
+                        : undefined;
+
+                    try {
+                      iconCanvas = await htmlToImage.toCanvas(iconRef.current, {
+                        height,
+                        skipAutoScale: true,
+                        style: { objectPosition },
+                        width,
+                      });
+                    } catch {
+                      // Ignore failure to capture
+                    }
                   }
 
                   if (
@@ -522,6 +476,7 @@ const FileEntry: FC<FileEntryProps> = ({
     isShortcut,
     isVisible,
     isYTUrl,
+    loadedIcon,
     mkdirRecursive,
     path,
     setInfo,
@@ -531,16 +486,29 @@ const FileEntry: FC<FileEntryProps> = ({
     writeFile,
   ]);
 
+  useEffect(() => () => getIconAbortController.current?.abort(), []);
+
+  const columnRowId = useId();
+
+  // Ending a rename removes the focused text box from the entry
   useEffect(
-    () => () => {
-      try {
-        getIconAbortController.current?.abort();
-      } catch {
-        // Failed to abort getIcon
-      }
-    },
-    []
+    () =>
+      renaming
+        ? () => whenFocusLost(() => buttonRef.current?.focus(PREVENT_SCROLL))
+        : undefined,
+    [renaming]
   );
+
+  useLayoutEffect(() => {
+    const button = buttonRef.current;
+
+    return () => {
+      // Deleting the focused entry keeps focus in its list, as in Explorer
+      if (button?.contains(document.activeElement)) {
+        whenFocusLost(() => fileManagerRef.current?.focus(PREVENT_SCROLL));
+      }
+    };
+  }, [fileManagerRef]);
 
   useLayoutEffect(() => {
     if (buttonRef.current && fileManagerRef.current) {
@@ -589,9 +557,17 @@ const FileEntry: FC<FileEntryProps> = ({
     <>
       <Button
         ref={buttonRef}
+        aria-describedby={showColumn ? columnRowId : undefined}
         aria-label={name}
+        aria-pressed={listView ? undefined : focusedEntries.includes(fileName)}
+        onFocusCapture={() => {
+          // Keyboard focus gets what hovering gives, like the tooltip
+          if (isKeyboardNavigating()) onMouseOverButton();
+        }}
         onMouseOverCapture={onMouseOverButton}
         title={tooltip}
+        {...(listView &&
+          openInFileExplorer && { "aria-expanded": showInFileManager })}
         {...(listView && { ...LIST_VIEW_ANIMATION, as: motion.button })}
         {...useDoubleClick(doubleClickHandler, listView)}
         {...(openInFileExplorer && fileDrop)}
@@ -609,12 +585,9 @@ const FileEntry: FC<FileEntryProps> = ({
         )}
       >
         <StyledFigure
-          ref={useCallback(
-            (figureRef: HTMLElement) => {
-              if (listView && hasFinePointer()) spotlightEffect(figureRef);
-            },
-            [listView]
-          )}
+          ref={(figureRef: HTMLElement) => {
+            if (listView && hasFinePointer()) spotlightEffect(figureRef);
+          }}
           $renaming={renaming}
           style={showColumn ? lockWidthStyle : undefined}
           {...(isHeading && {
@@ -627,6 +600,7 @@ const FileEntry: FC<FileEntryProps> = ({
             $eager={loadIconImmediately}
             $moving={pasteList[path] === "move"}
             alt=""
+            onLoad={onIconLoad}
             src={icon}
             {...FileEntryIconSize[view]}
           />
@@ -634,6 +608,7 @@ const FileEntry: FC<FileEntryProps> = ({
             alt=""
             icon={icon}
             isDesktop={isDesktop}
+            loadedIcon={loadedIcon}
             showShortcutIcon={Boolean(hideShortcutIcon || stats.systemShortcut)}
             subIcons={subIcons}
             view={view}
@@ -660,6 +635,7 @@ const FileEntry: FC<FileEntryProps> = ({
         {showColumn && columns && (
           <ColumnRow
             columns={columns}
+            id={columnRowId}
             isDirectory={isDirectory}
             path={path}
             stats={stats}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   closeProcess,
   maximizeProcess,
@@ -19,6 +19,10 @@ import { startCloseEffect } from "utils/closeEffect";
 import { TRANSITIONS_IN_MILLISECONDS } from "utils/constants";
 
 type ProcessContextState = {
+  processes: Processes;
+};
+
+type ProcessContextActions = {
   argument: (
     id: string,
     name: keyof ProcessArguments,
@@ -33,129 +37,119 @@ type ProcessContextState = {
     name: keyof ProcessElements,
     element: HTMLElement
   ) => void;
-  maximize: (id: string) => void;
+  maximize: (id: string, maximized?: boolean) => void;
   minimize: (id: string) => void;
   open: (
     id: string,
     processArguments?: ProcessArguments,
     icon?: string
   ) => void;
-  processes: Processes;
   title: (id: string, newTitle: string) => void;
   url: (id: string, newUrl: string) => void;
 };
 
-const useProcessContextState = (): ProcessContextState => {
+const useProcessContextState = (
+  getState: () => ProcessContextState
+): {
+  actions: ProcessContextActions;
+  state: ProcessContextState;
+} => {
   const [processes, setProcesses] = useState<Processes>(
     Object.create(null) as Processes
   );
-  const processesRef = useRef<Processes>({} as Processes);
+  const closingIdsRef = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    processesRef.current = processes;
-  }, [processes]);
+  const argument = (
+    id: string,
+    name: keyof ProcessArguments,
+    value: ProcessArguments[keyof ProcessArguments]
+  ): void => setProcesses(setProcessArgument(id, name, value));
+  const close = (id: string, closing?: boolean): void =>
+    setProcesses(closeProcess(id, closing));
+  const icon = (id: string, newIcon: string): void =>
+    setProcesses(setIcon(id, newIcon));
+  const maximize = (id: string, maximized?: boolean): void =>
+    setProcesses(maximizeProcess(id, maximized));
+  const minimize = (id: string): void => setProcesses(minimizeProcess(id));
+  const open = (
+    id: string,
+    processArguments?: ProcessArguments,
+    initialIcon?: string
+  ): void => {
+    if (id === "ExternalURL") {
+      const { url: externalUrl = "" } = processArguments || {};
 
-  const argument = useCallback(
-    (
-      id: string,
-      name: keyof ProcessArguments,
-      value: ProcessArguments[keyof ProcessArguments]
-    ) => setProcesses(setProcessArgument(id, name, value)),
-    []
-  );
-  const close = useCallback(
-    (id: string, closing?: boolean) => setProcesses(closeProcess(id, closing)),
-    []
-  );
-  const icon = useCallback(
-    (id: string, newIcon: string) => setProcesses(setIcon(id, newIcon)),
-    []
-  );
-  const maximize = useCallback(
-    (id: string) => setProcesses(maximizeProcess(id)),
-    []
-  );
-  const minimize = useCallback(
-    (id: string) => setProcesses(minimizeProcess(id)),
-    []
-  );
-  const open = useCallback(
-    (id: string, processArguments?: ProcessArguments, initialIcon?: string) => {
-      if (id === "ExternalURL") {
-        const { url: externalUrl = "" } = processArguments || {};
-
-        if (
-          externalUrl.startsWith("http:") ||
-          externalUrl.startsWith("https:")
-        ) {
-          window.open(
-            decodeURIComponent(externalUrl),
-            "_blank",
-            "noopener,noreferrer"
-          );
-        }
-      } else {
-        setProcesses(openProcess(id, processArguments || {}, initialIcon));
-      }
-    },
-    []
-  );
-  const linkElement = useCallback(
-    (id: string, name: keyof ProcessElements, element: HTMLElement) =>
-      setProcesses(setProcessElement(id, name, element)),
-    []
-  );
-  const title = useCallback(
-    (id: string, newTitle: string) => setProcesses(setTitle(id, newTitle)),
-    []
-  );
-  const url = useCallback(
-    (id: string, newUrl: string) => setProcesses(setUrl(id, newUrl)),
-    []
-  );
-  const closeWithTransition = useCallback(
-    (id: string): void => {
-      const { componentWindow, hasWindow } = processesRef.current[id] || {};
-      const initClose = (): void => {
-        close(id, true);
-        window.setTimeout(() => close(id), TRANSITIONS_IN_MILLISECONDS.WINDOW);
-      };
-
-      if (componentWindow && hasWindow !== false) {
-        startCloseEffect(componentWindow, initClose);
-      } else {
-        initClose();
-      }
-    },
-    [close]
-  );
-  const closeProcessesByUrl = useCallback(
-    (closeUrl: string): void =>
-      setProcesses((currentProcesses) => {
-        Object.entries(currentProcesses).forEach(
-          ([id, { url: processUrl }]) => {
-            if (processUrl === closeUrl) closeWithTransition(id);
-          }
+      if (externalUrl.startsWith("http:") || externalUrl.startsWith("https:")) {
+        window.open(
+          decodeURIComponent(externalUrl),
+          "_blank",
+          "noopener,noreferrer"
         );
+      }
+    } else {
+      setProcesses(openProcess(id, processArguments || {}, initialIcon));
+    }
+  };
+  const linkElement = (
+    id: string,
+    name: keyof ProcessElements,
+    element: HTMLElement
+  ): void => setProcesses(setProcessElement(id, name, element));
+  const title = (id: string, newTitle: string): void =>
+    setProcesses(setTitle(id, newTitle));
+  const url = (id: string, newUrl: string): void =>
+    setProcesses(setUrl(id, newUrl));
+  const closeWithTransition = (id: string): void => {
+    // Capturing the window for a close effect is async, so rapid close
+    // requests could each spawn their own effect. Ignore repeats until
+    // the process is fully closed.
+    if (closingIdsRef.current.has(id)) return;
 
-        return currentProcesses;
-      }),
-    [closeWithTransition]
-  );
+    closingIdsRef.current.add(id);
+
+    const { componentWindow, hasWindow } = getState().processes[id] || {};
+    let closeInitiated = false;
+    const initClose = (): void => {
+      if (closeInitiated) return;
+
+      closeInitiated = true;
+      close(id, true);
+      window.setTimeout(() => {
+        close(id);
+        closingIdsRef.current.delete(id);
+      }, TRANSITIONS_IN_MILLISECONDS.WINDOW);
+    };
+
+    if (componentWindow && hasWindow !== false) {
+      startCloseEffect(componentWindow, initClose).catch(initClose);
+    } else {
+      initClose();
+    }
+  };
+  const closeProcessesByUrl = (closeUrl: string): void =>
+    setProcesses((currentProcesses) => {
+      Object.entries(currentProcesses).forEach(([id, { url: processUrl }]) => {
+        if (processUrl === closeUrl) closeWithTransition(id);
+      });
+
+      return currentProcesses;
+    });
 
   return {
-    argument,
-    close,
-    closeProcessesByUrl,
-    closeWithTransition,
-    icon,
-    linkElement,
-    maximize,
-    minimize,
-    open,
-    processes,
-    title,
-    url,
+    actions: {
+      argument,
+      close,
+      closeProcessesByUrl,
+      closeWithTransition,
+      icon,
+      linkElement,
+      maximize,
+      minimize,
+      open,
+      title,
+      url,
+    },
+    state: { processes },
   };
 };
 

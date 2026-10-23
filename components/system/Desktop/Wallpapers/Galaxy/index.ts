@@ -1,0 +1,78 @@
+import { type GalaxyConfig } from "components/system/Desktop/Wallpapers/Galaxy/config";
+import { listenGalaxyInput } from "components/system/Desktop/Wallpapers/Galaxy/input";
+import { type WallpaperConfig } from "components/system/Desktop/Wallpapers/types";
+
+const Galaxy = async (
+  el: HTMLElement | null,
+  config?: WallpaperConfig,
+  fallback?: () => void
+): Promise<void> => {
+  if (!el) return;
+  if (typeof WebGLRenderingContext === "undefined") {
+    fallback?.();
+    return;
+  }
+
+  try {
+    const { createGalaxyRenderer } =
+      await import("components/system/Desktop/Wallpapers/Galaxy/renderer");
+    const canvas = document.createElement("canvas");
+    // Same hiDPI backing store as the worker path (see useWallpaper)
+    const scale = Math.min(window.devicePixelRatio || 1, 1.5);
+    const setCanvasSize = (): void => {
+      canvas.style.width = `${el.offsetWidth}px`;
+      canvas.style.height = `${el.offsetHeight}px`;
+    };
+
+    canvas.width = Math.floor(el.offsetWidth * scale);
+    canvas.height = Math.floor(el.offsetHeight * scale);
+    setCanvasSize();
+    canvas.setAttribute("aria-hidden", "true");
+    el.append(canvas);
+
+    // `let`, as the renderer is replaced when a lost context is restored
+    let renderer = createGalaxyRenderer(
+      canvas,
+      config as Partial<GalaxyConfig>
+    );
+    const stopInput = listenGalaxyInput({
+      onTilt: (x, y) => renderer.setTilt(x, y),
+      onVisibility: (visible) => renderer.setVisible(visible),
+    });
+    const resizeListener = (): void => {
+      setCanvasSize();
+      renderer.resize(el.offsetWidth * scale, el.offsetHeight * scale);
+    };
+    const contextLostListener = (event: Event): void => {
+      // preventDefault keeps the evicted context restorable
+      event.preventDefault();
+      renderer.destroy();
+    };
+    const contextRestoredListener = (): void => {
+      renderer = createGalaxyRenderer(canvas, config as Partial<GalaxyConfig>);
+    };
+
+    // iOS can resize the page (zoom, dismissed banners) without a resize event
+    const resizeObserver = new ResizeObserver(resizeListener);
+
+    resizeObserver.observe(el);
+    canvas.addEventListener("webglcontextlost", contextLostListener);
+    canvas.addEventListener("webglcontextrestored", contextRestoredListener);
+
+    window.WallpaperDestroy = () => {
+      resizeObserver.disconnect();
+      canvas.removeEventListener("webglcontextlost", contextLostListener);
+      canvas.removeEventListener(
+        "webglcontextrestored",
+        contextRestoredListener
+      );
+      stopInput();
+      renderer.destroy();
+      window.WallpaperDestroy = undefined;
+    };
+  } catch {
+    fallback?.();
+  }
+};
+
+export default Galaxy;

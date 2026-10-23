@@ -1,4 +1,4 @@
-import { type PlaywrightTestConfig, devices } from "@playwright/test";
+import { devices, type PlaywrightTestConfig } from "@playwright/test";
 
 const OVERRIDE_URL = "";
 const { CI, PORT = 3000 } = process.env;
@@ -19,11 +19,23 @@ const config: PlaywrightTestConfig = {
         : {
             ...chrome,
             launchOptions: {
-              args: ["--enable-gpu", "--use-gl=angle"],
+              args: ["--enable-gpu", "--use-gl=angle", "--mute-audio"],
             },
           },
     },
-    { name: "firefox", use: firefox },
+    {
+      name: "firefox",
+      use: CI
+        ? firefox
+        : {
+            ...firefox,
+            launchOptions: {
+              firefoxUserPrefs: {
+                "media.volume_scale": "0.0",
+              },
+            },
+          },
+    },
     { name: "webkit", use: safari },
   ],
   reporter: [["list"], ["html", { open: CI ? "never" : "always" }]],
@@ -42,5 +54,4 @@ const config: PlaywrightTestConfig = {
   workers: CI ? 1 : undefined,
 };
 
-// ts-prune-ignore-next
 export default config;

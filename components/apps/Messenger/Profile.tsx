@@ -1,53 +1,72 @@
-import { memo, useState } from "react";
+import { useState } from "react";
+import { useNip05Domain } from "components/apps/Messenger/hooks";
 import { Avatar, Verified } from "components/apps/Messenger/Icons";
 import StyledProfile from "components/apps/Messenger/StyledProfile";
-import { useNip05Domain } from "components/apps/Messenger/hooks";
+import { label } from "utils/functions";
+
+export const PROFILE = "Profile";
 
 type ProfileProps = {
+  captionId?: string;
+  expanded?: boolean;
   nip05?: string;
-  onClick?: (event: React.MouseEvent) => void;
-  onMouseDown?: () => void;
+  onClick?: React.MouseEventHandler;
   picture?: string;
   pubkey?: string;
   userName?: string;
 };
 
 const Profile: FC<ProfileProps> = ({
+  captionId,
   children,
+  expanded,
   nip05,
   onClick,
-  onMouseDown,
   picture,
   pubkey,
   userName = "Unknown",
 }) => {
   const verifiedDomain = useNip05Domain(nip05, pubkey);
   const [loadedImage, setLoadedImage] = useState("");
+  const avatar = (
+    <>
+      {picture && (
+        <img
+          alt=""
+          onLoad={() => setLoadedImage(picture)}
+          src={picture}
+          style={
+            loadedImage === picture
+              ? {}
+              : { position: "absolute", visibility: "hidden" }
+          }
+        />
+      )}
+      {(!picture || loadedImage !== picture) && <Avatar />}
+      {verifiedDomain && (
+        <div className="verified" role="img" {...label(verifiedDomain)}>
+          <Verified />
+        </div>
+      )}
+    </>
+  );
 
   return (
-    <StyledProfile $clickable={Boolean(onMouseDown || onClick)}>
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-      <div onClick={onClick} onMouseDown={onMouseDown}>
-        {picture && (
-          <img
-            alt={userName}
-            onLoad={() => setLoadedImage(picture)}
-            src={picture}
-            style={
-              loadedImage === picture
-                ? {}
-                : { position: "absolute", visibility: "hidden" }
-            }
-          />
-        )}
-        {(!picture || loadedImage !== picture) && <Avatar />}
-        {verifiedDomain && (
-          <div className="verified" title={verifiedDomain}>
-            <Verified />
-          </div>
-        )}
-      </div>
-      <figcaption>
+    <StyledProfile $clickable={Boolean(onClick)}>
+      {onClick ? (
+        <button
+          aria-expanded={expanded}
+          aria-haspopup="menu"
+          onClick={onClick}
+          type="button"
+          {...label(PROFILE)}
+        >
+          {avatar}
+        </button>
+      ) : (
+        <div>{avatar}</div>
+      )}
+      <figcaption id={captionId}>
         <span>{userName}</span>
         {children}
       </figcaption>
@@ -55,4 +74,4 @@ const Profile: FC<ProfileProps> = ({
   );
 };
 
-export default memo(Profile);
+export default Profile;

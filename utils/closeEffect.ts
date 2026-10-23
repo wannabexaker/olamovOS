@@ -54,7 +54,7 @@ const compileShader = (
   gl: WebGLRenderingContext,
   type: number,
   source: string
-): WebGLShader | undefined => {
+): undefined | WebGLShader => {
   const shader = gl.createShader(type);
 
   if (!shader) return undefined;
@@ -74,7 +74,7 @@ const compileShader = (
 const createGlProgram = (
   gl: WebGLRenderingContext,
   fragmentSource: string
-): WebGLProgram | undefined => {
+): undefined | WebGLProgram => {
   const vertShader = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
   const fragShader = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
 
@@ -118,7 +118,7 @@ type EffectContext = {
   duration: number;
   gl: WebGLRenderingContext;
   startTime: number;
-  uProgress: WebGLUniformLocation | null;
+  uProgress: null | WebGLUniformLocation;
 };
 
 const setupEffect = async (
@@ -575,6 +575,7 @@ export const startCloseEffect = async (
     width: `${cssW}px`,
     zIndex: "10000",
   });
+  canvas.setAttribute("aria-hidden", "true");
 
   const pointerPos: [number, number] = [
     Math.max(0, Math.min(1, (lastPointerX - rect.left) / rect.width)),
@@ -604,6 +605,7 @@ export const startCloseEffect = async (
   hideRealWindow(componentWindow);
   onCaptured();
   await runAnimation(ctx);
+  ctx.gl.getExtension("WEBGL_lose_context")?.loseContext();
 
   if (isRandom) preloadNick(nextRandomNick);
 };

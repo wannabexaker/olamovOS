@@ -1,13 +1,13 @@
 import { basename, dirname, join } from "path";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import StyledPaint from "components/apps/Paint/StyledPaint";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import StyledLoading from "components/system/Apps/StyledLoading";
 import useFileDrop from "components/system/Files/FileManager/useFileDrop";
 import useTitle from "components/system/Window/useTitle";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
+import { useFileSystemActions } from "contexts/fileSystem";
+import { useProcess, useProcessesActions } from "contexts/process";
+import { useForegroundId, useSessionActions } from "contexts/session";
 import { type WallpaperFit } from "contexts/session/types";
 import {
   DESKTOP_PATH,
@@ -40,29 +40,30 @@ type JsPaint = {
 };
 
 const Paint: FC<ComponentProcessProps> = ({ id }) => {
+  const { closeWithTransition } = useProcessesActions();
   const {
-    closeWithTransition,
-    processes: { [id]: { libs: [paintSrc = ""] = [], url = "" } = {} } = {},
-  } = useProcesses();
+    libs: [paintSrc = ""] = [],
+    title: windowTitle,
+    url = "",
+  } = useProcess(id);
   const { createPath, exists, readFile, updateFolder, writeFile } =
-    useFileSystem();
-  const { foregroundId, setForegroundId, setWallpaper } = useSession();
+    useFileSystemActions();
+  const { setForegroundId, setWallpaper } = useSessionActions();
+  const foregroundId = useForegroundId();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [jsPaintInstance, setJsPaintInstance] = useState<JsPaint>();
   const { prependFileToTitle } = useTitle(id);
-  const setWallpaperFromCanvas = useCallback(
+  const setWallpaperFromCanvas =
     (fit: WallpaperFit) =>
-      (canvas: HTMLCanvasElement): void => {
-        const wallpaperPath = join(PICUTRES_PATH, "wallpaper.png");
+    (canvas: HTMLCanvasElement): void => {
+      const wallpaperPath = join(PICUTRES_PATH, "wallpaper.png");
 
-        canvas.toBlob(async (blob) => {
-          await writeFile(wallpaperPath, await blobToBuffer(blob), true);
-          setWallpaper(wallpaperPath, fit);
-        });
-      },
-    [setWallpaper, writeFile]
-  );
+      canvas.toBlob(async (blob) => {
+        await writeFile(wallpaperPath, await blobToBuffer(blob), true);
+        setWallpaper(wallpaperPath, fit);
+      });
+    };
   const { onDragOver, onDrop } = useFileDrop({ id });
 
   useEffect(() => {
@@ -188,11 +189,14 @@ const Paint: FC<ComponentProcessProps> = ({ id }) => {
       {paintSrc && (
         <iframe
           ref={iframeRef}
+          // Busy on the content only, never on an ancestor of the
+          // role="status" loader or its announcement may be withheld
+          aria-busy={!loaded || undefined}
           height="100%"
           id={`jspaint-${id}`}
           onLoad={() => setLoaded(true)}
           src={paintSrc}
-          title={id}
+          title={windowTitle}
           width="100%"
           {...IFRAME_CONFIG}
         />
@@ -201,4 +205,4 @@ const Paint: FC<ComponentProcessProps> = ({ id }) => {
   );
 };
 
-export default memo(Paint);
+export default Paint;

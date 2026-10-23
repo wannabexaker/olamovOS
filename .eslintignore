@@ -1,9 +1,0 @@
-.husky/_
-.next
-node_modules
-out
-playwright-report
-public
-scripts
-test-results
-*.config.js

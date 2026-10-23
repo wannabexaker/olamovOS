@@ -21,13 +21,14 @@ export const cascadePosition = (
     stackOrder.find((stackPid) => stackPid.startsWith(processPid)) || "";
   const { componentWindow } = processes?.[parentPositionProcess] || {};
   const {
+    height = 0,
+    width = 0,
     x = 0,
     y = 0,
-    width = 0,
-    height = 0,
   } = componentWindow?.getBoundingClientRect() || {};
   const isOffscreen =
-    x + offset + width > viewWidth() || y + offset + height > viewHeight();
+    x + offset + width > viewWidth() ||
+    y + offset + height > viewHeight() - TASKBAR_HEIGHT;
 
   return !isOffscreen && (x || y)
     ? {
@@ -45,6 +46,10 @@ export const centerPosition = ({ height, width }: Size): Position => {
     y: Math.floor((vh - TASKBAR_HEIGHT) / 2 - pxToNum(height) / 2),
   };
 };
+
+export const coversViewport = ({ height, width }: Size): boolean =>
+  pxToNum(width) >= viewWidth() &&
+  pxToNum(height) >= viewHeight() - TASKBAR_HEIGHT;
 
 export const WINDOW_OFFSCREEN_BUFFER_PX = {
   BOTTOM: 15,
@@ -79,49 +84,36 @@ export const isWindowOutsideBounds = (
   );
 };
 
-export const minMaxSize = (size: Size, lockAspectRatio: boolean): Size => {
+export const minMaxSize = (
+  size: Size,
+  lockAspectRatio: boolean,
+  lockAspectRatioExtraHeight = 0
+): Size => {
   const desiredHeight = Number(size.height);
   const desiredWidth = Number(size.width);
   const [vh, vw] = [viewHeight(), viewWidth()];
   const vhWithoutTaskbar = vh - TASKBAR_HEIGHT;
-  const height = Math.max(
-    MIN_WINDOW_HEIGHT,
-    Math.min(desiredHeight, vhWithoutTaskbar)
+
+  if (!lockAspectRatio) {
+    return {
+      height: Math.max(
+        MIN_WINDOW_HEIGHT,
+        Math.min(desiredHeight, vhWithoutTaskbar)
+      ),
+      width: Math.max(MIN_WINDOW_WIDTH, Math.min(desiredWidth, vw)),
+    };
+  }
+
+  // Scale only the content so the title bar height stays fixed
+  const contentHeight = Math.max(1, desiredHeight - lockAspectRatioExtraHeight);
+  const scale = Math.min(
+    vw / desiredWidth,
+    (vhWithoutTaskbar - lockAspectRatioExtraHeight) / contentHeight,
+    Math.max(1, MIN_WINDOW_WIDTH / desiredWidth)
   );
-  const width = Math.max(MIN_WINDOW_WIDTH, Math.min(desiredWidth, vw));
 
-  if (!lockAspectRatio) return { height, width };
-
-  const isDesiredHeight = desiredHeight === height;
-  const isDesiredWidth = desiredWidth === width;
-
-  if (!isDesiredHeight && !isDesiredWidth) {
-    if (desiredHeight > desiredWidth) {
-      return {
-        height,
-        width: Math.round(width / (vhWithoutTaskbar / height)),
-      };
-    }
-
-    return {
-      height: Math.round(height / (vw / width)),
-      width,
-    };
-  }
-
-  if (!isDesiredHeight) {
-    return {
-      height,
-      width: Math.round(width / (desiredHeight / height)),
-    };
-  }
-
-  if (!isDesiredWidth) {
-    return {
-      height: Math.round(height / (desiredWidth / width)),
-      width,
-    };
-  }
-
-  return { height, width };
+  return {
+    height: Math.round(contentHeight * scale) + lockAspectRatioExtraHeight,
+    width: Math.round(desiredWidth * scale),
+  };
 };

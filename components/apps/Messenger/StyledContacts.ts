@@ -13,9 +13,11 @@ const StyledContacts = styled(motion.ol)`
   width: 100%;
 
   li {
+    align-items: center;
     border-radius: 10px;
     color: #fff;
     cursor: pointer;
+    display: flex;
     margin: 8px;
     padding: 8px;
     position: relative;
@@ -24,12 +26,64 @@ const StyledContacts = styled(motion.ol)`
       cursor: pointer;
     }
 
+    input[type="checkbox"] {
+      accent-color: #2d88ff;
+      cursor: pointer;
+      height: 16px;
+      margin: 0 10px 0 2px;
+      min-width: 16px;
+    }
+
+    &.toolbar {
+      cursor: default;
+      gap: 4px;
+      margin-bottom: 0;
+      padding: 0 8px;
+
+      &:hover {
+        background-color: transparent;
+      }
+
+      h2,
+      label {
+        color: #e4e6eb;
+        flex: 1;
+        font-size: 15px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      label {
+        align-items: center;
+        cursor: pointer;
+        display: flex;
+        font-size: 13px;
+      }
+
+      button {
+        border-radius: 6px;
+        color: #2d88ff;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 4px 6px;
+        width: auto;
+
+        &:hover:not(:disabled) {
+          background-color: #3a3b3c;
+        }
+
+        &:disabled {
+          cursor: default;
+          opacity: 40%;
+        }
+      }
+    }
+
     &:hover {
       background-color: #3a3b3c;
     }
 
-    &:focus,
-    &.selected {
+    :root[data-keyboard] &:not(.toolbar):focus-within {
       background-color: rgb(45 136 255 / 20%);
     }
 
@@ -113,54 +167,6 @@ const StyledContacts = styled(motion.ol)`
       right: 8px;
       top: calc(50% - 5px);
       width: 10px;
-    }
-
-    .request-actions {
-      display: flex;
-      gap: 8px;
-      justify-content: flex-end;
-      padding: 4px 8px 0;
-
-      button {
-        border-radius: 4px;
-        font-size: 12px;
-        font-weight: 600;
-        padding: 4px 12px;
-
-        &:first-child {
-          background: #0084ff;
-          color: #fff;
-        }
-
-        &:last-child {
-          background: #3a3b3c;
-          color: #b0b3b8;
-        }
-      }
-    }
-  }
-
-  [data-pinned="owner"] {
-    background: linear-gradient(
-      180deg,
-      ${({ theme }) => theme.colors.startMenu.bandBackground} 0%,
-      ${({ theme }) => theme.colors.startMenu.bandGradient} 100%
-    );
-    border-bottom: 1px solid ${({ theme }) => theme.colors.taskbar.bevelBottom};
-    box-shadow: inset 0 -1px 0 ${({ theme }) => theme.colors.taskbar.bevelTop};
-  }
-
-  section.requests {
-    border-top: 1px solid ${({ theme }) => theme.colors.taskbar.bevelBottom};
-    margin-top: 8px;
-    padding-top: 8px;
-
-    > h3 {
-      color: ${({ theme }) => theme.colors.highlight};
-      font-size: 11px;
-      font-weight: 600;
-      padding: 4px 12px;
-      text-transform: uppercase;
     }
   }
 `;

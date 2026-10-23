@@ -1,20 +1,20 @@
-import { useTheme } from "styled-components";
 import { useEffect, useState } from "react";
+import { useTheme } from "styled-components";
 import { type ContainerHookProps } from "components/system/Apps/AppContainer";
 import useEmscriptenMount from "components/system/Files/FileManager/useEmscriptenMount";
 import { type EmscriptenFS } from "contexts/fileSystem/useAsyncFs";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
+import { useProcess } from "contexts/process";
+import { useWindowState } from "contexts/session";
+import useIsolatedContentWindow from "hooks/useIsolatedContentWindow";
 import { TRANSITIONS_IN_MILLISECONDS } from "utils/constants";
 import { haltEvent, loadFiles, pxToNum } from "utils/functions";
-import useIsolatedContentWindow from "hooks/useIsolatedContentWindow";
 
 declare global {
   interface Window {
     CCModule: {
-      OnResize?: () => void;
       arguments: string[];
       canvas: HTMLCanvasElement;
+      OnResize?: () => void;
       postRun: (() => void)[];
       print: () => void;
       setCanvasSize?: (width: number, height: number) => void;
@@ -27,16 +27,12 @@ declare global {
 const useClassiCube = ({
   containerRef,
   id,
-  setLoading,
   loading,
+  setLoading,
 }: ContainerHookProps): void => {
-  const { processes: { [id]: process } = {} } = useProcesses();
   const mountEmFs = useEmscriptenMount();
-  const {
-    windowStates: { [id]: windowState },
-  } = useSession();
-  const { size } = windowState || {};
-  const { componentWindow, libs, maximized } = process || {};
+  const { size } = useWindowState(id);
+  const { componentWindow, libs, maximized } = useProcess(id);
   const {
     sizes: { titleBar },
   } = useTheme();
@@ -69,18 +65,16 @@ const useClassiCube = ({
     }, TRANSITIONS_IN_MILLISECONDS.WINDOW);
 
     return () => window.clearTimeout(timeoutId);
-    // eslint-disable-next-line react-hooks-addons/no-unused-deps
   }, [
     componentWindow,
     contentWindow?.CCModule,
+    // eslint-disable-next-line react/exhaustive-effect-dependencies
     maximized,
     size,
     titleBar.height,
   ]);
 
   useEffect(() => {
-    let cleanup: (() => void) | undefined;
-
     if (loading) {
       const newContentWindow = getContentWindow?.();
 
@@ -101,7 +95,7 @@ const useClassiCube = ({
               mountEmFs(newContentWindow.FS as EmscriptenFS, id);
             },
             () => {
-              const { width, height } = canvas.getBoundingClientRect() || {};
+              const { height, width } = canvas.getBoundingClientRect() || {};
 
               canvas.width = width;
               canvas.height = height;
@@ -113,12 +107,8 @@ const useClassiCube = ({
         };
 
         loadFiles(libs, undefined, undefined, undefined, newContentWindow);
-
-        cleanup = () => canvas.removeEventListener("contextmenu", haltEvent);
       }
     }
-
-    return cleanup;
   }, [getContentWindow, id, libs, loading, mountEmFs, setLoading]);
 };
 

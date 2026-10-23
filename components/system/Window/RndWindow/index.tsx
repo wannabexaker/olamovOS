@@ -1,12 +1,12 @@
-import { Rnd } from "react-rnd";
-import { memo, useCallback, useEffect, useMemo, useRef } from "react";
-import useRnd from "components/system/Window/RndWindow/useRnd";
-import { useProcesses } from "contexts/process";
+import { useEffect, useRef } from "react";
+import { type Props, Rnd } from "react-rnd";
+import { useProcess, useProcessesActions } from "contexts/process";
 import { FOCUSABLE_ELEMENT, PREVENT_SCROLL } from "utils/constants";
 import { haltEvent } from "utils/functions";
 
 type RndWindowProps = {
   id: string;
+  rndProps: Props;
   zIndex: number;
 };
 
@@ -14,6 +14,7 @@ const reRouteFocus =
   (focusElement?: HTMLElement) =>
   (element?: Element): void => {
     element?.setAttribute("tabindex", FOCUSABLE_ELEMENT.tabIndex.toString());
+    element?.setAttribute("aria-hidden", "true");
     element?.addEventListener("contextmenu", haltEvent);
     element?.addEventListener("mousedown", (event) => {
       event.preventDefault();
@@ -21,35 +22,25 @@ const reRouteFocus =
     });
   };
 
-const RndWindow: FC<RndWindowProps> = ({ children, id, zIndex }) => {
-  const {
-    linkElement,
-    processes: { [id]: process },
-  } = useProcesses();
-  const { Component, componentWindow, maximized, minimized } = process || {};
-  const rndRef = useRef<Rnd | null>(null);
-  const rndProps = useRnd(id);
-  const style = useMemo<React.CSSProperties>(
-    () => ({
-      pointerEvents: minimized ? "none" : undefined,
-      zIndex,
-    }),
-    [minimized, zIndex]
-  );
-  const linkComponentWindow = useCallback(
-    (rndEntry: Rnd) => {
-      rndRef.current = rndEntry;
+const RndWindow: FC<RndWindowProps> = ({ children, id, rndProps, zIndex }) => {
+  const { linkElement } = useProcessesActions();
+  const { Component, componentWindow, maximized, minimized } = useProcess(id);
+  const rndRef = useRef<null | Rnd>(null);
+  const style: React.CSSProperties = {
+    pointerEvents: minimized ? "none" : undefined,
+    zIndex,
+  };
+  const linkComponentWindow = (rndEntry: Rnd): void => {
+    rndRef.current = rndEntry;
 
-      const rndWindowElements =
-        rndEntry?.resizableElement?.current?.children || [];
-      const [windowContainer] = rndWindowElements as HTMLElement[];
+    const rndWindowElements =
+      rndEntry?.resizableElement?.current?.children || [];
+    const [windowContainer] = rndWindowElements as HTMLElement[];
 
-      if (Component && !componentWindow && windowContainer) {
-        linkElement(id, "componentWindow", windowContainer);
-      }
-    },
-    [Component, componentWindow, id, linkElement]
-  );
+    if (Component && !componentWindow && windowContainer) {
+      linkElement(id, "componentWindow", windowContainer);
+    }
+  };
 
   useEffect(() => {
     if (!maximized) {
@@ -71,4 +62,4 @@ const RndWindow: FC<RndWindowProps> = ({ children, id, zIndex }) => {
   );
 };
 
-export default memo(RndWindow);
+export default RndWindow;

@@ -1,17 +1,17 @@
-import { memo, useCallback } from "react";
+import { useCallback } from "react";
+import { type Project, PROJECTS } from "components/apps/MyProjects/projects";
 import StyledMyProjects, {
   ProjectCard,
 } from "components/apps/MyProjects/StyledMyProjects";
-import { type Project, PROJECTS } from "components/apps/MyProjects/projects";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
-import { useProcesses } from "contexts/process";
+import { useProcessesActions } from "contexts/process";
 
 const openExternal = (url: string): void => {
   window.open(url, "_blank", "noopener,noreferrer");
 };
 
 const MyProjects: FC<ComponentProcessProps> = () => {
-  const { open } = useProcesses();
+  const { open } = useProcessesActions();
   const launch = useCallback(
     (project: Project): void => {
       if (project.embeddable) open(project.appId);
@@ -80,4 +80,4 @@ const MyProjects: FC<ComponentProcessProps> = () => {
   );
 };
 
-export default memo(MyProjects);
+export default MyProjects;

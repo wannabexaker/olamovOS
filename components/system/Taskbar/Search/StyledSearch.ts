@@ -2,12 +2,13 @@ import { m as motion } from "motion/react";
 import styled from "styled-components";
 import { SINGLE_LINE_HEIGHT_ADDITION } from "components/system/Taskbar/Search";
 import TaskbarPanel from "components/system/Taskbar/TaskbarPanel";
+import VisuallyHidden from "styles/common/VisuallyHidden";
 
 type StyledSearchProps = {
   $singleLine: boolean;
 };
 
-const StyledSearch = styled(motion.nav)<StyledSearchProps>`
+const StyledSearch = styled(motion.section)<StyledSearchProps>`
   ${({ $singleLine, theme }) =>
     TaskbarPanel(
       theme.sizes.search.maxHeight +
@@ -22,6 +23,10 @@ const StyledSearch = styled(motion.nav)<StyledSearchProps>`
 
   @supports ((-webkit-backdrop-filter: none) or (backdrop-filter: none)) {
     background-color: ${({ theme }) => theme.colors.startMenu.background};
+  }
+
+  .results-status {
+    ${VisuallyHidden};
   }
 
   @keyframes fade-in {

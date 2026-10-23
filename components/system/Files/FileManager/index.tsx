@@ -1,15 +1,16 @@
 import { basename, join } from "path";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { useEffect, useRef, useState } from "react";
 import StyledLoading from "components/system/Apps/StyledLoading";
-import StatusBar from "components/system/Files/FileManager/StatusBar";
-import {
-  DEFAULT_COLUMNS,
-  type Columns as ColumnsObject,
-} from "components/system/Files/FileManager/Columns/constants";
 import FileEntry from "components/system/Files/FileEntry";
+import Columns from "components/system/Files/FileManager/Columns";
+import {
+  type Columns as ColumnsObject,
+  DEFAULT_COLUMNS,
+} from "components/system/Files/FileManager/Columns/constants";
 import StyledSelection from "components/system/Files/FileManager/Selection/StyledSelection";
 import useSelection from "components/system/Files/FileManager/Selection/useSelection";
+import StatusBar from "components/system/Files/FileManager/StatusBar";
 import useDraggableEntries from "components/system/Files/FileManager/useDraggableEntries";
 import useFileDrop from "components/system/Files/FileManager/useFileDrop";
 import useFileKeyboardShortcuts from "components/system/Files/FileManager/useFileKeyboardShortcuts";
@@ -20,16 +21,24 @@ import {
   type FileManagerViewNames,
   FileManagerViews,
 } from "components/system/Files/Views";
-import { useFileSystem } from "contexts/fileSystem";
+import { useFileSystemActions, useRootFs } from "contexts/fileSystem";
+import {
+  useForegroundId,
+  useSessionActions,
+  useView,
+  useWindowState,
+} from "contexts/session";
 import {
   FOCUSABLE_ELEMENT,
   MOUNTABLE_EXTENSIONS,
   PREVENT_SCROLL,
+  ROOT_NAME,
   SHORTCUT_EXTENSION,
+  START_MENU_PATH,
 } from "utils/constants";
-import { getExtension, haltEvent } from "utils/functions";
-import Columns from "components/system/Files/FileManager/Columns";
-import { useSession } from "contexts/session";
+import { clsx, getExtension, haltEvent } from "utils/functions";
+import { isEditableElement } from "utils/keyboard";
+import { loadFileSystemFunctions } from "utils/loaders";
 
 const StyledEmpty = dynamic(
   () => import("components/system/Files/FileManager/StyledEmpty")
@@ -42,7 +51,6 @@ type FileManagerProps = {
   hideScrolling?: boolean;
   hideShortcutIcons?: boolean;
   id?: string;
-  initiallyExpanded?: readonly string[];
   isDesktop?: boolean;
   isStartMenu?: boolean;
   loadIconsImmediately?: boolean;
@@ -63,7 +71,6 @@ const FileManager: FC<FileManagerProps> = ({
   hideScrolling,
   hideShortcutIcons,
   id,
-  initiallyExpanded,
   isDesktop,
   isStartMenu,
   loadIconsImmediately,
@@ -74,27 +81,26 @@ const FileManager: FC<FileManagerProps> = ({
   skipSorting,
   url,
 }) => {
-  const { foregroundId, views, setViews } = useSession();
-  const view = useMemo(() => {
-    if (isDesktop) return "icon";
-    if (isStartMenu) return "list";
-
-    return views[url] || DEFAULT_VIEW;
-  }, [isDesktop, isStartMenu, url, views]);
-  const isDetailsView = useMemo(() => view === "details", [view]);
+  const { setForegroundId, setViews } = useSessionActions();
+  const foregroundId = useForegroundId();
+  const sessionView = useView(url);
+  const view = isDesktop
+    ? "icon"
+    : isStartMenu
+      ? "list"
+      : sessionView || DEFAULT_VIEW;
+  const isDetailsView = view === "details";
+  const { columns: savedColumns = DEFAULT_COLUMNS } = useWindowState(id || "");
   const [columns, setColumns] = useState<ColumnsObject | undefined>(() =>
-    isDetailsView ? DEFAULT_COLUMNS : undefined
+    isDetailsView ? savedColumns : undefined
   );
   const [currentUrl, setCurrentUrl] = useState(url);
   const [renaming, setRenaming] = useState("");
   const [mounted, setMounted] = useState<boolean>(false);
   const fileManagerRef = useRef<HTMLOListElement | null>(null);
-  const isFileExplorerIconView = useMemo(
-    () => !isStartMenu && !isDesktop && !isDetailsView,
-    [isDesktop, isDetailsView, isStartMenu]
-  );
-  const { focusedEntries, focusableEntry, ...focusFunctions } =
-    useFocusableEntries(fileManagerRef, isFileExplorerIconView);
+  const { blurEntry, focusableEntry, focusedEntries, focusEntry } =
+    useFocusableEntries(fileManagerRef);
+  const focusFunctions = { blurEntry, focusEntry };
   const { fileActions, files, folderActions, isLoading, updateFiles } =
     useFolder(url, setRenaming, focusFunctions, {
       hideFolders,
@@ -103,11 +109,13 @@ const FileManager: FC<FileManagerProps> = ({
       skipFsWatcher,
       skipSorting,
     });
-  const { lstat, mountFs, rootFs } = useFileSystem();
+  const { lstat, mountFs } = useFileSystemActions();
+  const rootFs = useRootFs();
   const { StyledFileEntry, StyledFileManager } = FileManagerViews[view];
-  const { isSelecting, selectionRect, selectionStyling, selectionEvents } =
+  const { isSelecting, selectionEvents, selectionRect, selectionStyling } =
     useSelection(fileManagerRef, focusedEntries, focusFunctions, isDesktop);
   const draggableEntry = useDraggableEntries(
+    url,
     focusedEntries,
     focusFunctions,
     fileManagerRef,
@@ -126,18 +134,11 @@ const FileManager: FC<FileManagerProps> = ({
     isDesktop,
     isStartMenu
   );
-  const loading = useMemo(() => {
-    if (hideLoading) return false;
-
-    return isLoading || url !== currentUrl;
-  }, [currentUrl, hideLoading, isLoading, url]);
-  const setView = useCallback(
-    (newView: FileManagerViewNames) => {
-      setViews((currentViews) => ({ ...currentViews, [url]: newView }));
-      setColumns(newView === "details" ? DEFAULT_COLUMNS : undefined);
-    },
-    [setViews, url]
-  );
+  const loading = hideLoading ? false : isLoading || url !== currentUrl;
+  const setView = (newView: FileManagerViewNames): void => {
+    setViews((currentViews) => ({ ...currentViews, [url]: newView }));
+    setColumns(newView === "details" ? savedColumns : undefined);
+  };
   const keyShortcuts = useFileKeyboardShortcuts(
     files,
     url,
@@ -155,30 +156,7 @@ const FileManager: FC<FileManagerProps> = ({
   const [permission, setPermission] = useState<PermissionState>("prompt");
   const requestingPermissions = useRef(false);
   const focusedOnLoad = useRef(false);
-  const onKeyDown = useMemo(
-    () => (renaming === "" ? keyShortcuts() : undefined),
-    [keyShortcuts, renaming]
-  );
-  const fileKeys = useMemo(() => Object.keys(files), [files]);
-  const orderedFileKeys = useMemo(() => {
-    if (!pinToBottom || pinToBottom.length === 0) return fileKeys;
-
-    const pinSet = new Set(pinToBottom);
-    const isPinned = (file: string): boolean =>
-      pinSet.has(basename(file, SHORTCUT_EXTENSION));
-    const unpinned = fileKeys.filter((file) => !isPinned(file));
-    const pinned = pinToBottom
-      .map((name) =>
-        fileKeys.find((file) => basename(file, SHORTCUT_EXTENSION) === name)
-      )
-      .filter((file): file is string => file !== undefined);
-
-    return [...unpinned, ...pinned];
-  }, [fileKeys, pinToBottom]);
-  const isEmptyFolder = useMemo(
-    () => !isDesktop && !isStartMenu && !loading && fileKeys.length === 0,
-    [fileKeys.length, isDesktop, isStartMenu, loading]
-  );
+  const onKeyDown = renaming === "" ? keyShortcuts : undefined;
 
   useEffect(() => {
     if (
@@ -188,7 +166,7 @@ const FileManager: FC<FileManagerProps> = ({
     ) {
       requestingPermissions.current = true;
 
-      import("contexts/fileSystem/functions").then(({ requestPermission }) =>
+      loadFileSystemFunctions().then(({ requestPermission }) =>
         requestPermission(currentUrl)
           .then((permissions) => {
             const isGranted = permissions === "granted";
@@ -235,6 +213,7 @@ const FileManager: FC<FileManagerProps> = ({
   useEffect(() => {
     if (url !== currentUrl) {
       folderActions.resetFiles();
+      // eslint-disable-next-line react/set-state-in-effect -- Resets alongside focus state kept in refs, which render can't write
       setCurrentUrl(url);
       setPermission("denied");
       focusedOnLoad.current = false;
@@ -249,14 +228,50 @@ const FileManager: FC<FileManagerProps> = ({
       !isStartMenu &&
       (!id || foregroundId === id)
     ) {
-      fileManagerRef.current?.focus(PREVENT_SCROLL);
+      // Loading can finish after focus has left the window or is being typed in
+      requestAnimationFrame(() => {
+        const { activeElement } = document;
+
+        if (
+          activeElement === document.body ||
+          (fileManagerRef.current
+            ?.closest("section")
+            ?.contains(activeElement) &&
+            !isEditableElement(activeElement))
+        ) {
+          fileManagerRef.current?.focus(PREVENT_SCROLL);
+        }
+      });
+
       focusedOnLoad.current = true;
     }
   }, [foregroundId, id, isDesktop, isStartMenu, loading]);
 
   useEffect(() => {
-    setColumns(isDetailsView ? DEFAULT_COLUMNS : undefined);
-  }, [isDetailsView]);
+    // eslint-disable-next-line react/set-state-in-effect -- Columns resize locally and only reload from saved widths here
+    setColumns(isDetailsView ? savedColumns : undefined);
+  }, [isDetailsView, savedColumns]);
+
+  // Focusing the desktop must deactivate the foreground window, as no window
+  // blur fires when its focused element was already removed by navigation
+  const onDesktopFocusCapture = (): void => setForegroundId("");
+  const fileKeys = Object.keys(files);
+  const isEmptyFolder =
+    !isDesktop && !isStartMenu && !loading && fileKeys.length === 0;
+  // Olamov: entries named in pinToBottom (e.g. Start Menu "Run..." and
+  // "Shut Down...") always render last, in the order given.
+  const isPinnedToBottom = (file: string): boolean =>
+    Boolean(pinToBottom?.includes(basename(file, SHORTCUT_EXTENSION)));
+  const orderedFileKeys = pinToBottom?.length
+    ? [
+        ...fileKeys.filter((file) => !isPinnedToBottom(file)),
+        ...pinToBottom
+          .map((name) =>
+            fileKeys.find((file) => basename(file, SHORTCUT_EXTENSION) === name)
+          )
+          .filter((file): file is string => file !== undefined),
+      ]
+    : fileKeys;
 
   return (
     <>
@@ -266,7 +281,22 @@ const FileManager: FC<FileManagerProps> = ({
         ref={fileManagerRef}
         $isEmptyFolder={isEmptyFolder}
         $scrollable={!hideScrolling}
+        aria-busy={loading || undefined}
+        aria-label={
+          isDesktop
+            ? "Desktop"
+            : isStartMenu
+              ? url === START_MENU_PATH
+                ? "All apps"
+                : `${basename(url)} folder`
+              : basename(url) || ROOT_NAME
+        }
+        className={clsx({
+          "has-selection": focusedEntries.length > 0,
+          "multi-select": focusedEntries.length > 1,
+        })}
         onKeyDownCapture={loading ? undefined : onKeyDown}
+        {...(isDesktop && { onFocusCapture: onDesktopFocusCapture })}
         {...(loading || readOnly
           ? { onContextMenu: haltEvent }
           : {
@@ -282,55 +312,47 @@ const FileManager: FC<FileManagerProps> = ({
             columns={columns}
             directory={url}
             files={files}
+            id={id}
             setColumns={setColumns}
           />
         )}
         {!loading && (
           <>
             {isSelecting && <StyledSelection style={selectionStyling} />}
-            {orderedFileKeys.map((file) => {
-              const name = basename(file, SHORTCUT_EXTENSION);
-
-              return (
-                <StyledFileEntry
-                  key={file}
-                  $desktop={isDesktop}
-                  $selecting={isSelecting}
-                  $visible={!isLoading}
-                  data-pinned={pinToBottom?.includes(name) ? "true" : undefined}
-                  {...(!readOnly &&
-                    draggableEntry(url, file, renaming === file))}
-                  {...(renaming === "" && { onKeyDown: keyShortcuts(file) })}
-                  {...focusableEntry(file)}
-                >
-                  <FileEntry
-                    columns={columns}
-                    fileActions={fileActions}
-                    fileManagerId={id}
-                    fileManagerRef={fileManagerRef}
-                    focusFunctions={focusFunctions}
-                    focusedEntries={focusedEntries}
-                    hasNewFolderIcon={isStartMenu}
-                    hideShortcutIcon={hideShortcutIcons}
-                    initiallyExpanded={
-                      isStartMenu && initiallyExpanded?.includes(name)
-                    }
-                    isDesktop={isDesktop}
-                    isHeading={isDesktop && files[file].systemShortcut}
-                    isLoadingFileManager={isLoading}
-                    loadIconImmediately={loadIconsImmediately}
-                    name={name}
-                    path={join(url, file)}
-                    readOnly={readOnly}
-                    renaming={renaming === file}
-                    selectionRect={selectionRect}
-                    setRenaming={setRenaming}
-                    stats={files[file]}
-                    view={view}
-                  />
-                </StyledFileEntry>
-              );
-            })}
+            {orderedFileKeys.map((file) => (
+              <StyledFileEntry
+                key={file}
+                $desktop={isDesktop}
+                $selecting={isSelecting}
+                $visible={!isLoading}
+                data-pinned={isPinnedToBottom(file) ? "true" : undefined}
+                {...(!readOnly && draggableEntry(url, file, renaming === file))}
+                {...focusableEntry(file)}
+              >
+                <FileEntry
+                  columns={columns}
+                  fileActions={fileActions}
+                  fileManagerId={id}
+                  fileManagerRef={fileManagerRef}
+                  focusedEntries={focusedEntries}
+                  focusFunctions={focusFunctions}
+                  hasNewFolderIcon={isStartMenu}
+                  hideShortcutIcon={hideShortcutIcons}
+                  isDesktop={isDesktop}
+                  isHeading={isDesktop && files[file].systemShortcut}
+                  isLoadingFileManager={isLoading}
+                  loadIconImmediately={loadIconsImmediately}
+                  name={basename(file, SHORTCUT_EXTENSION)}
+                  path={join(url, file)}
+                  readOnly={readOnly}
+                  renaming={renaming === file}
+                  selectionRect={selectionRect}
+                  setRenaming={setRenaming}
+                  stats={files[file]}
+                  view={view}
+                />
+              </StyledFileEntry>
+            ))}
           </>
         )}
       </StyledFileManager>
@@ -348,4 +370,4 @@ const FileManager: FC<FileManagerProps> = ({
   );
 };
 
-export default memo(FileManager);
+export default FileManager;

@@ -13,6 +13,8 @@ const webpack = require("webpack");
  * @type {import("next").NextConfig}
  * */
 const nextConfig = {
+  agentRules: false,
+  allowedDevOrigins: ["**.*"],
   compiler: {
     reactRemoveProperties: isProduction,
     removeConsole: isProduction,
@@ -43,8 +45,22 @@ const nextConfig = {
   ],
   output: "export",
   productionBrowserSourceMaps: false,
+  reactCompiler: true,
   reactProductionProfiling: false,
   reactStrictMode: !isProduction,
+  // These ship syntax newer than the browserslist targets (e.g. ??=, #private)
+  transpilePackages: [
+    "@ffmpeg/ffmpeg",
+    "@jitl/quickjs-wasmfile-release-sync",
+    "@noble/ciphers",
+    "@noble/curves",
+    "@noble/hashes",
+    "@scure/base",
+    "mediainfo.js",
+    "multiformats",
+    "nostr-tools",
+    "prettier",
+  ],
   webpack: (config) => {
     config.plugins.push(
       new webpack.NormalModuleReplacementPlugin(/node:/, (resource) => {
@@ -52,7 +68,8 @@ const nextConfig = {
 
         switch (mod) {
           case "buffer":
-            resource.request = "buffer";
+          case "module":
+            resource.request = mod;
             break;
           case "stream":
             resource.request = "readable-stream";
@@ -70,6 +87,10 @@ const nextConfig = {
     config.resolve.alias["MediaInfoModule.wasm"] = path.resolve(
       __dirname,
       "public/System/mediainfo.js/MediaInfoModule.wasm"
+    );
+    config.resolve.alias["ani-cursor/dist/parser"] = path.resolve(
+      __dirname,
+      "node_modules/ani-cursor/dist/parser.js"
     );
 
     config.resolve.fallback = config.resolve.fallback || {};

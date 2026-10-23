@@ -1,14 +1,21 @@
 import { basename, extname } from "path";
-import { useCallback, useEffect, useRef } from "react";
 import { type Unzipped } from "fflate";
+import { useEffect, useRef } from "react";
 import { getConfig } from "components/apps/BoxedWine/config";
 import { type ContainerHookProps } from "components/system/Apps/AppContainer";
 import useEmscriptenMount from "components/system/Files/FileManager/useEmscriptenMount";
 import useTitle from "components/system/Window/useTitle";
-import { useFileSystem } from "contexts/fileSystem";
+import { useFileSystemActions } from "contexts/fileSystem";
 import { type EmscriptenFS } from "contexts/fileSystem/useAsyncFs";
-import { useProcesses } from "contexts/process";
+import { useProcess, useProcessesActions } from "contexts/process";
 import { getExtension, isCanvasDrawn, loadFiles } from "utils/functions";
+import { loadZipFunctions } from "utils/loaders";
+
+type WineFS = EmscriptenFS & {
+  close: (stream: { path?: string }) => void;
+};
+
+const WINE_LOADER = "/root/base/bin/wine";
 
 declare global {
   interface Window {
@@ -21,13 +28,13 @@ declare global {
   }
 }
 
-const getExeName = (files: Unzipped): string | undefined => {
+const getExeName = (files: Unzipped): string => {
   const fileList = Object.entries(files);
   const [[fileName] = []] = fileList
     .filter(([name]) => name.toLowerCase().endsWith(".exe"))
     .sort(([, aFile], [, bFile]) => bFile.length - aFile.length);
 
-  return fileName;
+  return fileName || "";
 };
 
 const useBoxedWine = ({
@@ -37,31 +44,35 @@ const useBoxedWine = ({
   url,
 }: ContainerHookProps): void => {
   const { appendFileToTitle } = useTitle(id);
-  const { processes: { [id]: { libs = [] } = {} } = {} } = useProcesses();
-  const { readFile } = useFileSystem();
+  const { libs = [] } = useProcess(id);
+  const { closeWithTransition } = useProcessesActions();
+  const { readFile } = useFileSystemActions();
   const mountEmFs = useEmscriptenMount();
   const loadedUrl = useRef<string>(undefined);
   const blankCanvasCheckerTimer = useRef(0);
-  const loadEmulator = useCallback(async (): Promise<void> => {
+  const loadEmulator = async (): Promise<void> => {
     let dynamicConfig = {};
     const [initialPayload, { zipAsync }] = await Promise.all([
       url ? readFile(url) : Promise.resolve(Buffer.from("")),
-      import("utils/zipFunctions"),
+      loadZipFunctions(),
     ]);
     let appPayload = initialPayload;
     const extension = getExtension(url);
     const isExecutable = extension === ".exe";
     let appName = basename(url, extension);
-    const zippedPayload = async (): Promise<Buffer> =>
-      Buffer.from(await zipAsync({ [basename(url)]: appPayload }));
+    const zippedPayload = async (): Promise<Buffer> => {
+      const fileName = basename(url);
+
+      return Buffer.from(await zipAsync({ [fileName]: appPayload }));
+    };
 
     if (isExecutable) {
       appPayload = await zippedPayload();
     } else if (url) {
-      const { unzip } = await import("utils/zipFunctions");
+      const { unzip } = await loadZipFunctions();
 
       try {
-        appName = getExeName(await unzip(appPayload)) || "";
+        appName = getExeName(await unzip(appPayload));
       } catch {
         appPayload = await zippedPayload();
         appName = "";
@@ -74,7 +85,10 @@ const useBoxedWine = ({
     };
 
     if (!blankCanvasCheckerTimer.current) {
-      containerRef.current?.prepend(document.createElement("ol"));
+      const consoleList = document.createElement("ol");
+
+      consoleList.setAttribute("aria-label", "Boot log");
+      containerRef.current?.prepend(consoleList);
       blankCanvasCheckerTimer.current = window.setInterval(() => {
         if (isCanvasDrawn(containerRef.current?.querySelector("canvas"))) {
           clearInterval(blankCanvasCheckerTimer.current);
@@ -108,9 +122,26 @@ const useBoxedWine = ({
       if (url) appendFileToTitle(appName || basename(url));
       try {
         window.BoxedWineShell(() => {
+          const wineFs = window.FS as WineFS;
+          const { close } = wineFs;
+
+          // Each Wine process holds the loader open until it exits, once the
+          // program has drawn the first one to close means it was closed
+          wineFs.close = (stream) => {
+            close(stream);
+
+            if (
+              appName &&
+              stream.path === WINE_LOADER &&
+              !blankCanvasCheckerTimer.current
+            ) {
+              closeWithTransition(id);
+            }
+          };
+
           setLoading(false);
           mountEmFs(
-            window.FS as EmscriptenFS,
+            wineFs,
             url ? `BoxedWine_${basename(url, extname(url))}` : id
           );
         });
@@ -118,16 +149,7 @@ const useBoxedWine = ({
         // Ignore BoxedWine errors
       }
     });
-  }, [
-    appendFileToTitle,
-    containerRef,
-    id,
-    libs,
-    mountEmFs,
-    readFile,
-    setLoading,
-    url,
-  ]);
+  };
 
   useEffect(() => {
     if (loadedUrl.current !== url && (url || !loadedUrl.current)) {

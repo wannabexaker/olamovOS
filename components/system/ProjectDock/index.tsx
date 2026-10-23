@@ -1,15 +1,14 @@
-import { memo } from "react";
 import { type Project, PROJECTS } from "components/apps/MyProjects/projects";
 import StyledProjectDock, {
   DockButton,
 } from "components/system/ProjectDock/StyledProjectDock";
-import { useProcesses } from "contexts/process";
+import { useProcessesActions } from "contexts/process";
 
 // A discreet macOS-style icon dock on the right edge. Click a tile to open the
 // project — embedded in-OS, or in a new tab for external / store links.
 // Extensible: add an entry to PROJECTS and it shows up here automatically.
 const ProjectDock: FC = () => {
-  const { open } = useProcesses();
+  const { open } = useProcessesActions();
 
   const launch = (project: Project): void => {
     if (project.embeddable) {
@@ -43,4 +42,4 @@ const ProjectDock: FC = () => {
   );
 };
 
-export default memo(ProjectDock);
+export default ProjectDock;

@@ -1,11 +1,12 @@
 import { extname } from "path";
+import { useLayoutEffect, useRef } from "react";
 import { useTheme } from "styled-components";
-import { memo, useCallback, useLayoutEffect, useMemo, useRef } from "react";
-import { type FileManagerViewNames } from "components/system/Files/Views";
 import { measureText } from "components/system/Files/FileEntry/functions";
 import StyledRenameBox from "components/system/Files/FileEntry/StyledRenameBox";
+import { type FileManagerViewNames } from "components/system/Files/Views";
 import { PREVENT_SCROLL } from "utils/constants";
 import { haltEvent } from "utils/functions";
+import { isComposingKey } from "utils/keyboard";
 
 type RenameBoxProps = {
   isDesktop?: boolean;
@@ -30,30 +31,29 @@ const RenameBox: FC<RenameBoxProps> = ({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const saveRename = (): void => renameFile(path, inputRef.current?.value);
   const { formats, sizes } = useTheme();
-  const isDetails = useMemo(() => view === "details", [view]);
-  const updateDimensions = useCallback(
-    (textArea: EventTarget | HTMLTextAreaElement | null): void => {
-      if (textArea instanceof HTMLTextAreaElement) {
-        const width = measureText(
-          textArea.value,
-          sizes.fileEntry.fontSize,
-          formats.systemFont
-        );
+  const isDetails = view === "details";
+  const updateDimensions = (
+    textArea: EventTarget | HTMLTextAreaElement | null
+  ): void => {
+    if (textArea instanceof HTMLTextAreaElement) {
+      const width = measureText(
+        textArea.value,
+        sizes.fileEntry.fontSize,
+        formats.systemFont
+      );
 
-        // Force height to re-calculate
-        if (!isDetails) textArea.setAttribute("style", "height: 1px");
+      // Force height to re-calculate
+      if (!isDetails) textArea.setAttribute("style", "height: 1px");
 
-        const newWidth = `width: ${width + TEXT_WIDTH_PADDING}px`;
-        const newHeight = `height: ${textArea.scrollHeight + TEXT_HEIGHT_PADDING}px`;
+      const newWidth = `width: ${width + TEXT_WIDTH_PADDING}px`;
+      const newHeight = `height: ${textArea.scrollHeight + TEXT_HEIGHT_PADDING}px`;
 
-        textArea.setAttribute(
-          "style",
-          isDetails ? newWidth : `${newHeight}; ${newWidth}`
-        );
-      }
-    },
-    [formats.systemFont, isDetails, sizes.fileEntry.fontSize]
-  );
+      textArea.setAttribute(
+        "style",
+        isDetails ? newWidth : `${newHeight}; ${newWidth}`
+      );
+    }
+  };
 
   useLayoutEffect(() => {
     requestAnimationFrame(() => updateDimensions(inputRef.current));
@@ -74,9 +74,13 @@ const RenameBox: FC<RenameBoxProps> = ({
       onBlurCapture={saveRename}
       onClick={haltEvent}
       onDragStart={haltEvent}
-      onKeyDown={({ key }) => {
-        if (key === "Enter") saveRename();
-        else if (key === "Escape") setRenaming("");
+      onKeyDown={(event) => {
+        if (isComposingKey(event.nativeEvent)) return;
+        if (event.key === "Enter") saveRename();
+        else if (event.key === "Escape") {
+          event.preventDefault();
+          setRenaming("");
+        }
       }}
       onKeyUp={(event) => {
         updateDimensions(event.target);
@@ -86,4 +90,4 @@ const RenameBox: FC<RenameBoxProps> = ({
   );
 };
 
-export default memo(RenameBox);
+export default RenameBox;

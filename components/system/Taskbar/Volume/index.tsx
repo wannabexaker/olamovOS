@@ -1,12 +1,16 @@
-import { memo, useCallback } from "react";
+import { useCallback } from "react";
+import { StyledVolumeButton } from "components/system/Taskbar/Volume/StyledVolume";
 import {
   VolumeHigh,
   VolumeLow,
   VolumeMid,
   VolumeMuted,
 } from "components/system/Taskbar/Volume/VolumeIcons";
-import { StyledVolumeButton } from "components/system/Taskbar/Volume/StyledVolume";
-import { useSession } from "contexts/session";
+import {
+  useAudioMuted,
+  useAudioVolume,
+  useSessionActions,
+} from "contexts/session";
 
 const VOLUME_STEP = 0.05;
 
@@ -28,8 +32,9 @@ const VolumeButton: FC<VolumeButtonProps> = ({
   hasAI,
   toggleVolume,
 }) => {
-  const { audioMuted, audioVolume, setAudioMuted, setAudioVolume } =
-    useSession();
+  const audioMuted = useAudioMuted();
+  const audioVolume = useAudioVolume();
+  const { setAudioMuted, setAudioVolume } = useSessionActions();
 
   const onWheel = useCallback(
     (event: React.WheelEvent<HTMLButtonElement>): void => {
@@ -55,4 +60,4 @@ const VolumeButton: FC<VolumeButtonProps> = ({
   );
 };
 
-export default memo(VolumeButton);
+export default VolumeButton;

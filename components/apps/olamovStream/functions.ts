@@ -1,4 +1,4 @@
-export type StreamProvider = "youtube" | "twitch";
+export type StreamProvider = "twitch" | "youtube";
 
 export type ParsedStream = {
   embedUrl: string | undefined;
@@ -46,7 +46,7 @@ const buildTwitchEmbedUrl = (target: TwitchTarget, parent: string): string => {
   return `https://clips.twitch.tv/embed?clip=${target.slug}&${p}`;
 };
 
-const parseUrl = (input: string): URL | undefined => {
+const parseUrl = (input: string): undefined | URL => {
   try {
     return new URL(input);
   } catch {

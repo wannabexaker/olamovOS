@@ -1,7 +1,7 @@
 import { type WallpaperConfig } from "components/system/Desktop/Wallpapers/types";
 import {
-  config as vantaConfig,
   disableControls,
+  config as vantaConfig,
 } from "components/system/Desktop/Wallpapers/vantaWaves/config";
 import { type VantaWavesConfig } from "components/system/Desktop/Wallpapers/vantaWaves/types";
 import { loadFiles } from "utils/functions";
@@ -24,7 +24,11 @@ const vantaWaves = (
     // Failed to cleanup effect
   }
 
-  if (!el || typeof WebGLRenderingContext === "undefined") return;
+  if (!el) return;
+  if (typeof WebGLRenderingContext === "undefined") {
+    fallback?.();
+    return;
+  }
 
   loadFiles(libs, true).then(() => {
     const { VANTA: { WAVES } = {} } = window;
@@ -44,6 +48,10 @@ const vantaWaves = (
           ...disableControls,
           ...wavesConfig,
         });
+        el.querySelector(":scope > canvas")?.setAttribute(
+          "aria-hidden",
+          "true"
+        );
       } catch {
         fallback?.();
       }

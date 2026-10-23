@@ -1,13 +1,18 @@
-FROM node:22-alpine
-
-ENV NODE_OPTIONS=--openssl-legacy-provider
+FROM node:22-alpine AS builder
 
 RUN apk add --no-cache git
 
-WORKDIR olamovOS
+WORKDIR /olamovOS
 COPY . .
 
 RUN yarn
 RUN yarn build
 
-CMD yarn serve
+FROM node:22-alpine
+
+WORKDIR /olamovOS
+COPY --from=builder /olamovOS/out ./out
+
+RUN npm install -g serve@latest
+
+CMD ["serve", "out"]

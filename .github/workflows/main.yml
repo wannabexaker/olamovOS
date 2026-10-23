@@ -3,31 +3,65 @@ name: Tests
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push supersedes an in-flight run of the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  tests:
-    timeout-minutes: 60
+  checks:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
+          cache: yarn
       - name: Install Dependencies
-        run: NODE_OPTIONS='--openssl-legacy-provider' yarn
+        run: yarn
       - name: Run Jest Unit Tests
         run: yarn test
+      # Type-aware lint resolves imports of the generated public/.index/*.json
+      - name: Generate File Indexes
+        run: yarn build:prebuild
+      - name: Run Oxlint
+        run: yarn lint
+
+  # One job per browser so each gets its own timeout: run back to back in a
+  # single job, the three browsers outlasted the 60 minute limit.
+  e2e:
+    name: e2e (${{ matrix.project }})
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: yarn
+      - name: Install Dependencies
+        run: yarn
       - name: Build App
         run: yarn build
-      - name: Install Playwright Browsers
-        run: yarn playwright install --with-deps
+      - name: Install Playwright Browser
+        run: yarn playwright install --with-deps ${{ matrix.project }}
+      # Fork config: upstream's suite minus tests of UI Olamov replaced.
       - name: Run Playwright E2E Tests
-        run: yarn e2e
-      # Only on failure: a passing run's report is never opened, and uploading
-      # one on every run is what fills the Actions storage quota.
-      - uses: actions/upload-artifact@v4
-        if: failure()
+        run: yarn e2e --config playwright.olamov.config.ts --project ${{ matrix.project }}
+      # Only on failure and never for PRs: a passing run's report is never
+      # opened, and uploading one per run is what fills the Actions storage quota.
+      - uses: actions/upload-artifact@v7
+        if: failure() && github.event_name != 'pull_request'
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.project }}
           path: playwright-report
           retention-days: 7

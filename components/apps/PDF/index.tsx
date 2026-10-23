@@ -1,6 +1,6 @@
-import { memo, useRef } from "react";
-import Page from "components/apps/PDF/Page";
+import { useRef } from "react";
 import Controls from "components/apps/PDF/Controls";
+import Page from "components/apps/PDF/Page";
 import StyledPDF from "components/apps/PDF/StyledPDF";
 import usePDF from "components/apps/PDF/usePDF";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
@@ -11,7 +11,13 @@ const PDF: FC<ComponentProcessProps> = ({ id }) => {
 
   return (
     <>
-      <StyledPDF ref={containerRef} {...useFileDrop({ id })}>
+      <StyledPDF
+        ref={containerRef}
+        aria-label="Pages"
+        role="region"
+        tabIndex={0}
+        {...useFileDrop({ id })}
+      >
         <ol className="pages">
           {usePDF(id, containerRef).map((canvas, index) => (
             <Page
@@ -29,4 +35,4 @@ const PDF: FC<ComponentProcessProps> = ({ id }) => {
   );
 };
 
-export default memo(PDF);
+export default PDF;

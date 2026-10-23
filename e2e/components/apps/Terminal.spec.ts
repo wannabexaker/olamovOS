@@ -7,7 +7,10 @@ import {
 } from "e2e/constants";
 import {
   captureConsoleLogs,
+  closePage,
   disableWallpaper,
+  flyIsHidden,
+  flyIsVisible,
   getHostname,
   loadApp,
   sendTabToTerminal,
@@ -20,8 +23,8 @@ import {
   terminalHasRows,
   terminalHasText,
   windowIsHidden,
-  windowTitlebarTextIsVisible,
   windowsAreVisible,
+  windowTitlebarTextIsVisible,
 } from "e2e/functions";
 
 test.beforeEach(captureConsoleLogs());
@@ -29,6 +32,7 @@ test.beforeEach(disableWallpaper);
 test.beforeEach(async ({ page }) => loadApp({ app: "Terminal" })({ page }));
 test.beforeEach(windowsAreVisible);
 test.beforeEach(terminalHasRows);
+test.afterEach(closePage);
 
 test.describe("has file system access", () => {
   test.describe("has current directory", () => {
@@ -231,11 +235,11 @@ test.describe("has file system access", () => {
 
 test.describe("has commands", () => {
   test("clear", async ({ page }) => {
-    await sendToTerminal({ page }, "echo hi");
-    await terminalHasText({ page }, "hi", 2);
+    await sendToTerminal({ page }, "echo test_echo_output");
+    await terminalHasText({ page }, "test_echo_output", 2);
 
     await sendToTerminal({ page }, "clear");
-    await terminalDoesNotHaveText({ page }, "hi");
+    await terminalDoesNotHaveText({ page }, "test_echo_output");
   });
 
   test("color", async ({ page }) => {
@@ -250,8 +254,8 @@ test.describe("has commands", () => {
   });
 
   test("echo", async ({ page }) => {
-    await sendToTerminal({ page }, "echo hi");
-    await terminalHasText({ page }, "hi", 2);
+    await sendToTerminal({ page }, "echo test_echo_output");
+    await terminalHasText({ page }, "test_echo_output", 2);
   });
 
   test("exit", async ({ page }) => {
@@ -330,6 +334,23 @@ test.describe("has commands", () => {
 
     await sendToTerminal({ page }, "qjs Object.keys(window)");
     await terminalHasText({ page }, '["console","window"]');
+  });
+
+  test("fly", async ({ page }) => {
+    await sendToTerminal({ page }, "fly");
+    await flyIsVisible({ page });
+
+    await sendToTerminal({ page }, "fly kill");
+    await flyIsHidden({ page });
+  });
+
+  test("fly help", async ({ page }) => {
+    await sendToTerminal({ page }, "fly help");
+
+    // The last line of the help text: the whole thing printed.
+    await terminalHasText({ page }, "crossed real synapses");
+    // Documentation must never wake the simulation.
+    await flyIsHidden({ page });
   });
 
   test("sheep", async ({ page }) => {

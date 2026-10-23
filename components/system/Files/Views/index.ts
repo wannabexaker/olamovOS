@@ -8,7 +8,6 @@ import { type IconProps } from "styles/common/Icon";
 
 export type StyledFileEntryProps = {
   $desktop?: boolean;
-  $labelHeightOffset?: number;
   $selecting?: boolean;
   $visible?: boolean;
 };
@@ -47,7 +46,7 @@ export const FileManagerViews: Record<FileManagerViewNames, FileManagerView> = {
 };
 
 export const FileEntryIconSize: Record<
-  FileManagerViewNames | "detailsSub" | "sub",
+  "detailsSub" | "sub" | FileManagerViewNames,
   IconProps
 > = {
   details: {

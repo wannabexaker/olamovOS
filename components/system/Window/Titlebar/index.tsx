@@ -1,22 +1,26 @@
-import { memo, useCallback, useRef } from "react";
+import { useRef } from "react";
 import rndDefaults from "components/system/Window/RndWindow/rndDefaults";
 import StyledTitlebar from "components/system/Window/Titlebar/StyledTitlebar";
-import {
-  CloseIcon,
-  MaximizeIcon,
-  MaximizedIcon,
-  MinimizeIcon,
-} from "components/system/Window/Titlebar/WindowActionIcons";
 import useTitlebarContextMenu from "components/system/Window/Titlebar/useTitlebarContextMenu";
 import useWindowActions from "components/system/Window/Titlebar/useWindowActions";
-import { useMenu } from "contexts/menu";
+import {
+  CloseIcon,
+  MaximizedIcon,
+  MaximizeIcon,
+  MinimizeIcon,
+} from "components/system/Window/Titlebar/WindowActionIcons";
+import { menuIsOpen, useMenuActions } from "contexts/menu";
 import { type MenuState } from "contexts/menu/useMenuContextState";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
+import { useProcess } from "contexts/process";
+import { useForegroundId, useSessionActions } from "contexts/session";
 import useDoubleClick from "hooks/useDoubleClick";
 import Button from "styles/common/Button";
 import Icon from "styles/common/Icon";
-import { LONG_PRESS_DELAY_MS, PREVENT_SCROLL } from "utils/constants";
+import {
+  FOCUSABLE_ELEMENT,
+  LONG_PRESS_DELAY_MS,
+  PREVENT_SCROLL,
+} from "utils/constants";
 import { haltEvent, label } from "utils/functions";
 
 type TitlebarProps = {
@@ -25,9 +29,6 @@ type TitlebarProps = {
 
 const Titlebar: FC<TitlebarProps> = ({ id }) => {
   const {
-    processes: { [id]: process },
-  } = useProcesses();
-  const {
     allowResizing = true,
     closing,
     componentWindow,
@@ -35,92 +36,78 @@ const Titlebar: FC<TitlebarProps> = ({ id }) => {
     hideMinimizeButton,
     hideTitlebarIcon,
     icon,
-    title,
     maximized,
-  } = process || {};
-  const { foregroundId, setForegroundId } = useSession();
+    title,
+  } = useProcess(id);
+  const { setForegroundId } = useSessionActions();
+  const foregroundId = useForegroundId();
   const isForeground = id === foregroundId;
   const { onClose, onMaximize, onMinimize } = useWindowActions(id);
-  const { menu, setMenu } = useMenu();
-  const resetMenu = useCallback(
-    () => setMenu(Object.create(null) as MenuState),
-    [setMenu]
-  );
+  const { setMenu } = useMenuActions();
+  const resetMenu = (): void => setMenu(Object.create(null) as MenuState);
   const menuIsOpenRef = useRef<boolean>(false);
-  const clickCloseCallback = useCallback(() => {
+  const clickCloseCallback = (): void => {
     if (menuIsOpenRef.current) resetMenu();
     onClose();
-  }, [onClose, resetMenu]);
+  };
   const onClickClose = useDoubleClick(clickCloseCallback);
   const onClickMaximize = useDoubleClick(onMaximize);
   const titlebarContextMenu = useTitlebarContextMenu(id);
   const touchStartTimeRef = useRef<number>(0);
   const touchStartPositionRef = useRef<DOMRect>(undefined);
   const touchesRef = useRef<TouchList>(undefined);
-  const onTouchEnd = useCallback<React.TouchEventHandler<HTMLButtonElement>>(
-    (event) => {
-      const { x, y } = componentWindow?.getBoundingClientRect() || {};
+  const onTouchEnd: React.TouchEventHandler<HTMLButtonElement> = (event) => {
+    const { x, y } = componentWindow?.getBoundingClientRect() || {};
 
-      if (
-        Date.now() - touchStartTimeRef.current >= LONG_PRESS_DELAY_MS &&
-        touchStartPositionRef.current &&
-        touchStartPositionRef.current.x === x &&
-        touchStartPositionRef.current.y === y
-      ) {
-        titlebarContextMenu.onContextMenuCapture(
-          Object.assign(event, {
-            touches: touchesRef.current,
-          })
-        );
-      }
-    },
-    [componentWindow, titlebarContextMenu]
-  );
-  const onTouchStart = useCallback<React.TouchEventHandler<HTMLButtonElement>>(
-    ({ touches }) => {
-      if (componentWindow) {
-        componentWindow.blur();
-        componentWindow.focus(PREVENT_SCROLL);
-        touchStartTimeRef.current = Date.now();
-        touchStartPositionRef.current = componentWindow.getBoundingClientRect();
-        touchesRef.current = touches as unknown as TouchList;
-      }
-    },
-    [componentWindow]
-  );
-  const onMouseDownCapture = useCallback<
-    React.MouseEventHandler<HTMLButtonElement>
-  >(
-    ({ button }) => {
-      if (button === 0 && Object.keys(menu).length > 0) resetMenu();
-    },
-    [menu, resetMenu]
-  );
-  const onMouseUpCapture = useCallback<
-    React.MouseEventHandler<HTMLButtonElement>
-  >(() => {
+    if (
+      Date.now() - touchStartTimeRef.current >= LONG_PRESS_DELAY_MS &&
+      touchStartPositionRef.current &&
+      touchStartPositionRef.current.x === x &&
+      touchStartPositionRef.current.y === y
+    ) {
+      titlebarContextMenu.onContextMenuCapture(
+        Object.assign(event, {
+          touches: touchesRef.current,
+        })
+      );
+    }
+  };
+  const onTouchStart: React.TouchEventHandler<HTMLButtonElement> = ({
+    touches,
+  }) => {
+    if (componentWindow) {
+      componentWindow.blur();
+      componentWindow.focus(PREVENT_SCROLL);
+      touchStartTimeRef.current = Date.now();
+      touchStartPositionRef.current = componentWindow.getBoundingClientRect();
+      touchesRef.current = touches as unknown as TouchList;
+    }
+  };
+  const onMouseDownCapture: React.MouseEventHandler<HTMLButtonElement> = ({
+    button,
+  }) => {
+    if (button === 0 && menuIsOpen()) resetMenu();
+  };
+  const onMouseUpCapture: React.MouseEventHandler<HTMLButtonElement> = () => {
     if (componentWindow && componentWindow !== document.activeElement) {
       setForegroundId(id);
       componentWindow?.focus(PREVENT_SCROLL);
     }
-  }, [componentWindow, id, setForegroundId]);
-  const onIconClick = useCallback<React.MouseEventHandler<HTMLImageElement>>(
-    (event) => {
-      if (menuIsOpenRef.current) resetMenu();
-      else titlebarContextMenu.onContextMenuCapture(event);
+  };
+  const onIconClick: React.MouseEventHandler<HTMLImageElement> = (event) => {
+    if (menuIsOpenRef.current) resetMenu();
+    else titlebarContextMenu.onContextMenuCapture(event);
 
-      menuIsOpenRef.current = !menuIsOpenRef.current;
+    menuIsOpenRef.current = !menuIsOpenRef.current;
 
-      onClickClose.onClick(event);
-    },
-    [onClickClose, resetMenu, titlebarContextMenu]
-  );
-  const triggerMinimize = useCallback(() => onMinimize(), [onMinimize]);
-  const onIconMouseDownCapture = useCallback<
-    React.MouseEventHandler<HTMLImageElement>
-  >(() => {
-    menuIsOpenRef.current = (menu.items?.length || 0) > 0;
-  }, [menu.items?.length]);
+    onClickClose.onClick(event);
+  };
+  const triggerMinimize = (): void => onMinimize();
+  const onIconMouseDownCapture: React.MouseEventHandler<
+    HTMLImageElement
+  > = () => {
+    menuIsOpenRef.current = menuIsOpen();
+  };
 
   return (
     <StyledTitlebar
@@ -131,6 +118,8 @@ const Titlebar: FC<TitlebarProps> = ({ id }) => {
       {...titlebarContextMenu}
     >
       <Button
+        aria-label={title}
+        {...FOCUSABLE_ELEMENT}
         {...(!hideMaximizeButton && allowResizing && !closing
           ? onClickMaximize
           : {})}
@@ -142,7 +131,7 @@ const Titlebar: FC<TitlebarProps> = ({ id }) => {
         <figure>
           {!hideTitlebarIcon && (
             <Icon
-              alt={title}
+              alt=""
               imgSize={16}
               onClick={onIconClick}
               onMouseDownCapture={onIconMouseDownCapture}
@@ -152,9 +141,13 @@ const Titlebar: FC<TitlebarProps> = ({ id }) => {
           <figcaption>{title}</figcaption>
         </figure>
       </Button>
-      <nav className="cancel">
+      {/* Shortcuts act on the window in front, so only it advertises them */}
+      <nav className="cancel" role="presentation">
         {!hideMinimizeButton && (
           <Button
+            aria-keyshortcuts={
+              isForeground && !maximized ? "Control+Shift+ArrowDown" : undefined
+            }
             className="minimize"
             onClick={triggerMinimize}
             {...label("Minimize")}
@@ -164,16 +157,26 @@ const Titlebar: FC<TitlebarProps> = ({ id }) => {
         )}
         {!hideMaximizeButton && (
           <Button
+            aria-keyshortcuts={
+              isForeground && allowResizing
+                ? maximized
+                  ? "Control+Shift+ArrowDown"
+                  : "Control+Shift+ArrowUp"
+                : undefined
+            }
             className="maximize"
             disabled={!allowResizing}
             onClick={onMaximize}
-            {...label(maximized ? "Restore Down" : "Maximize")}
+            {...(maximized
+              ? label("Restore Down", "Restore")
+              : label("Maximize"))}
           >
             {maximized ? <MaximizedIcon /> : <MaximizeIcon />}
           </Button>
         )}
         <Button
           $short={hideMaximizeButton && hideMinimizeButton}
+          aria-keyshortcuts={isForeground ? "Control+Alt+F4" : undefined}
           className="close"
           onClick={onClose}
           {...label("Close")}
@@ -185,4 +188,4 @@ const Titlebar: FC<TitlebarProps> = ({ id }) => {
   );
 };
 
-export default memo(Titlebar);
+export default Titlebar;

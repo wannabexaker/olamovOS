@@ -1,13 +1,13 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getNetworkConfig } from "components/apps/IRC/config";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import StyledLoading from "components/system/Apps/StyledLoading";
-import { useProcesses } from "contexts/process";
+import { useProcess, useProcessesActions } from "contexts/process";
 import processDirectory from "contexts/process/directory";
 import { IFRAME_CONFIG } from "utils/constants";
 
 type KiwiIrcClient = {
-  on: (
+  on: ((
     event: "irc.join" | "irc.part",
     callback: (
       channelData: {
@@ -17,15 +17,20 @@ type KiwiIrcClient = {
         name: string;
       }
     ) => void
-  ) => void;
+  ) => void) &
+    ((
+      event: "active.component.toggle" | "server.tab.show",
+      callback: () => void
+    ) => void);
+  state: {
+    $emit: (event: string) => void;
+    ui: { is_narrow: boolean };
+  };
 };
 
 const IRC: FC<ComponentProcessProps> = ({ id }) => {
-  const {
-    linkElement,
-    processes: { [id]: { libs: [ircSrc = ""] = [] } = {} } = {},
-    title,
-  } = useProcesses();
+  const { linkElement, title } = useProcessesActions();
+  const { libs: [ircSrc = ""] = [], title: windowTitle } = useProcess(id);
   const [loaded, setLoaded] = useState(false);
   const [channels, setChannels] = useState<string[]>([]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -58,6 +63,17 @@ const IRC: FC<ComponentProcessProps> = ({ id }) => {
         )
       );
 
+      // Kiwi only closes its narrow drawer on buffer clicks, leaving server
+      // tabs (channel list) and app settings opened underneath it
+      const hideNarrowStateBrowser = (): void => {
+        if (kiwiWindow.kiwi.state.ui.is_narrow) {
+          kiwiWindow.kiwi.state.$emit("statebrowser.hide");
+        }
+      };
+
+      kiwiWindow?.kiwi.on("server.tab.show", hideNarrowStateBrowser);
+      kiwiWindow?.kiwi.on("active.component.toggle", hideNarrowStateBrowser);
+
       linkElement(id, "peekElement", iframeRef.current);
     }
   }, [id, linkElement, loaded]);
@@ -76,10 +92,13 @@ const IRC: FC<ComponentProcessProps> = ({ id }) => {
       {!loaded && <StyledLoading />}
       <iframe
         ref={iframeRef}
+        // Busy on the content only, never on an ancestor of the
+        // role="status" loader or its announcement may be withheld
+        aria-busy={!loaded || undefined}
         height="100%"
         onLoad={() => setLoaded(true)}
         src={ircSrc}
-        title={id}
+        title={windowTitle}
         width="100%"
         {...IFRAME_CONFIG}
       />
@@ -87,4 +106,4 @@ const IRC: FC<ComponentProcessProps> = ({ id }) => {
   );
 };
 
-export default memo(IRC);
+export default IRC;

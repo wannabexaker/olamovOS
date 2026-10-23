@@ -1,14 +1,12 @@
-import { memo, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import StyledNotepad from "components/apps/Notepad/StyledNotepad";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
+import { useFileSystemActions } from "contexts/fileSystem";
+import { useProcess } from "contexts/process";
 
 const Notepad: FC<ComponentProcessProps> = ({ id }) => {
-  const { readFile } = useFileSystem();
-  const {
-    processes: { [id]: { url = "" } = {} },
-  } = useProcesses();
+  const { readFile } = useFileSystemActions();
+  const { url = "" } = useProcess(id);
   const [contents, setContents] = useState("");
 
   useEffect(() => {
@@ -42,4 +40,4 @@ const Notepad: FC<ComponentProcessProps> = ({ id }) => {
   );
 };
 
-export default memo(Notepad);
+export default Notepad;

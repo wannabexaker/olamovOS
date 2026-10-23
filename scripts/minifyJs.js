@@ -1,12 +1,29 @@
 const { readdirSync, readFileSync, statSync, writeFileSync } = require("fs");
 const { minify } = require("terser");
-const { extname, join } = require("path");
+const { extname, join, normalize } = require("path");
 
 const OUT_PATH = "out";
 
+// Olamov: the desktop shell is a component shared by the home page and every
+// SEO landing route, so webpack emits its startup worker (the taskbar clock)
+// into a shared chunk instead of pages/index-*.js. Inline the worker in
+// whichever of the home page's own initial chunks constructs it.
+const SKIPPED_CHUNKS =
+  /[\\/](?:webpack|framework|main|polyfills)-\w+\.js$|[\\/]pages[\\/]_app-\w+\.js$/;
+const indexChunks = new Set(
+  [
+    ...readFileSync(join(OUT_PATH, "index.html"), "utf8").matchAll(
+      /src="?\/(_next\/static\/chunks\/[^"\s>]+\.js)/g
+    ),
+  ]
+    .map(([, src]) => normalize(join(OUT_PATH, src)))
+    .filter((chunk) => !SKIPPED_CHUNKS.test(chunk))
+);
+let inlinedWorker = false;
+
 const JS_MINIFIER_CONFIG = {
   compress: true,
-  ecma: 2021,
+  ecma: 2020,
   mangle: true,
   output: {
     comments: false,
@@ -32,11 +49,13 @@ const inlineIndexWorkers = (code) => {
     const workerSource = readFileSync(
       join(OUT_PATH, "_next/static/chunks", workerFilename)
     );
-    const base64Worker = Buffer.from(workerSource).toString("base64");
 
     return code.replace(
       workerRegEx,
-      `new Worker("data:application/javascript;base64,${base64Worker}",{name:"${workerName}"})`
+      () =>
+        `new Worker(URL.createObjectURL(new Blob([${JSON.stringify(
+          workerSource.toString()
+        )}],{type:"text/javascript"})),{name:"${workerName}"})`
     );
   }
 
@@ -50,7 +69,7 @@ const minifyJsFiles = (path) =>
       const stats = statSync(fullPath);
 
       if (stats.isDirectory()) {
-        minifyJsFiles(fullPath);
+        await minifyJsFiles(fullPath);
       } else if (extname(entry).toLowerCase() === ".js") {
         const js = readFileSync(fullPath);
         let { code: minifiedJs, error } = await minify(
@@ -59,12 +78,10 @@ const minifyJsFiles = (path) =>
         );
 
         if (!error && minifiedJs?.length > 0) {
-          if (entry.startsWith("index-")) {
+          if (indexChunks.has(normalize(fullPath))) {
             const changedCode = inlineIndexWorkers(minifiedJs);
 
-            if (minifiedJs === changedCode) {
-              throw new Error("Inlining worker failed!");
-            }
+            if (changedCode !== minifiedJs) inlinedWorker = true;
 
             minifiedJs = changedCode;
           }
@@ -75,4 +92,8 @@ const minifyJsFiles = (path) =>
     })
   );
 
-minifyJsFiles(OUT_PATH);
+minifyJsFiles(OUT_PATH).then(() => {
+  // Still fail loudly if the worker pattern stops matching (e.g. bundler
+  // output changes), exactly like the upstream per-file check did.
+  if (!inlinedWorker) throw new Error("Inlining worker failed!");
+});

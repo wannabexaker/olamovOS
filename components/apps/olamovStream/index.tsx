@@ -1,22 +1,21 @@
 import {
-  type FormEvent,
-  memo,
+  type SubmitEvent,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import StyledOlamovStream from "components/apps/olamovStream/StyledOlamovStream";
 import {
   parseStreamUrl,
   type StreamProvider,
 } from "components/apps/olamovStream/functions";
+import StyledOlamovStream from "components/apps/olamovStream/StyledOlamovStream";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
-import { useSession } from "contexts/session";
+import { useAudioMuted, useAudioVolume } from "contexts/session";
 
 declare module "react" {
-  interface IframeHTMLAttributes<T> extends React.HTMLAttributes<T> {
+  interface IframeHTMLAttributes<T> extends HTMLAttributes<T> {
     credentialless?: "credentialless";
   }
 }
@@ -58,7 +57,8 @@ const shortLabel = (item: QueueItem): string =>
   item.raw.replace(/^https?:\/\/(?:www\.)?/, "").slice(0, 38);
 
 const OlamovStream: FC<ComponentProcessProps> = () => {
-  const { audioMuted, audioVolume } = useSession();
+  const audioMuted = useAudioMuted();
+  const audioVolume = useAudioVolume();
   const [input, setInput] = useState("");
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
@@ -136,11 +136,6 @@ const OlamovStream: FC<ComponentProcessProps> = () => {
     return () => window.removeEventListener("message", onMessage);
   }, [handleEnded]);
 
-  // Start playback automatically once the first item is queued.
-  useEffect(() => {
-    if (currentIndex === -1 && queue.length > 0) setCurrentIndex(0);
-  }, [currentIndex, queue.length]);
-
   const onIframeLoad = useCallback((): void => {
     iframeRef.current?.contentWindow?.postMessage(
       JSON.stringify({ event: "listening" }),
@@ -150,7 +145,7 @@ const OlamovStream: FC<ComponentProcessProps> = () => {
   }, [applyYouTubeVolume]);
 
   const onAdd = useCallback(
-    (event: FormEvent<HTMLFormElement>): void => {
+    (event: SubmitEvent<HTMLFormElement>): void => {
       event.preventDefault();
       const trimmed = input.trim();
       if (!trimmed) return;
@@ -175,6 +170,9 @@ const OlamovStream: FC<ComponentProcessProps> = () => {
           raw: trimmed,
         },
       ]);
+      // Start playback automatically once the first item is queued (-1 means
+      // nothing is playing, which only happens while the queue is empty).
+      setCurrentIndex((index) => (index === -1 ? 0 : index));
       setInput("");
       setError(undefined);
     },
@@ -338,4 +336,4 @@ const OlamovStream: FC<ComponentProcessProps> = () => {
   );
 };
 
-export default memo(OlamovStream);
+export default OlamovStream;

@@ -1,8 +1,8 @@
-import { extname, join } from "path";
+import { join } from "path";
 import { type openDB } from "idb";
 import {
-  type Mount,
   type ExtendedEmscriptenFileSystem,
+  type Mount,
 } from "contexts/fileSystem/useAsyncFs";
 import index from "public/.index/fs.9p.json";
 import {
@@ -11,6 +11,7 @@ import {
   MOUNTABLE_FS_TYPES,
   ONE_TIME_PASSIVE_EVENT,
 } from "utils/constants";
+import { getExtension } from "utils/functions";
 
 type BFSFS = { [key: string]: BFSFS | null };
 type FS9PV3 = [
@@ -29,13 +30,15 @@ type FS9P = {
   version: 3;
 };
 
-type FileSystemHandles = Record<string, FileSystemDirectoryHandle>;
+type FileSystemHandles = Record<string, FileSystemDirectoryHandle | undefined>;
 
 export const UNKNOWN_SIZE = -1;
 export const UNKNOWN_STATE_CODES = new Set(["EIO", "ENOENT"]);
 export const KEYVAL_STORE_NAME = "keyval";
 
 export const KEYVAL_DB = `${KEYVAL_STORE_NAME}-store`;
+
+export const BROWSER_FS_DB = "browserfs";
 
 const IDX_SIZE = 1;
 const IDX_MTIME = 2;
@@ -48,10 +51,17 @@ const IDX_GID = 0;
 const FILE_ENTRY = null;
 const fsroot = index.fsroot as FS9PV4[];
 
+const fs9pDataCache = new Map<string, number>();
+
 const get9pData = (
   path: string,
-  pathIndex: typeof IDX_SIZE | typeof IDX_MTIME
+  pathIndex: typeof IDX_MTIME | typeof IDX_SIZE
 ): number => {
+  const cacheKey = `${pathIndex}${path}`;
+  const cached = fs9pDataCache.get(cacheKey);
+
+  if (cached !== undefined) return cached;
+
   let fsPath = fsroot;
   let data = UNKNOWN_SIZE;
 
@@ -68,6 +78,8 @@ const get9pData = (
         fsPath = isBranch ? (pathBranch[IDX_TARGET] as FS9PV4[]) : [];
       }
     });
+
+  fs9pDataCache.set(cacheKey, data);
 
   return data;
 };
@@ -123,7 +135,7 @@ export const fs9pV4ToV3 = (): FS9P =>
 export const supportsIndexedDB = (): Promise<boolean> =>
   new Promise((resolve) => {
     try {
-      const db = window.indexedDB.open("browserfs");
+      const db = window.indexedDB.open(BROWSER_FS_DB);
 
       db.addEventListener(
         "error",
@@ -146,7 +158,7 @@ export const supportsIndexedDB = (): Promise<boolean> =>
 
           if (objectStoreNames?.length === 0) {
             try {
-              window.indexedDB.deleteDatabase("browserfs");
+              window.indexedDB.deleteDatabase(BROWSER_FS_DB);
             } catch {
               // Ignore errors to delete database
             }
@@ -210,7 +222,7 @@ export const getMountUrl = (
   mntMap: Record<string, Mount>
 ): string | undefined => {
   if (url === "/") return "";
-  if (mntMap[url] || MOUNTABLE_EXTENSIONS.has(extname(url))) return url;
+  if (mntMap[url] || MOUNTABLE_EXTENSIONS.has(getExtension(url))) return url;
 
   return Object.keys(mntMap)
     .filter((mountedUrl) => mountedUrl !== "/")

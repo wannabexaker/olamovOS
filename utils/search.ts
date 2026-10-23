@@ -1,11 +1,11 @@
 import { basename, extname } from "path";
-import { useEffect, useState } from "react";
-import { type Index } from "lunr";
 import type OverlayFS from "browserfs/dist/node/backend/OverlayFS";
 import { type FileSystem } from "browserfs/dist/node/core/file_system";
-import { useFileSystem } from "contexts/fileSystem";
-import { type RootFileSystem } from "contexts/fileSystem/useAsyncFs";
+import { type Index } from "lunr";
+import { useEffect, useState } from "react";
 import SEARCH_EXTENSIONS from "scripts/searchExtensions.json";
+import { useFileSystemActions, useRootFs } from "contexts/fileSystem";
+import { type RootFileSystem } from "contexts/fileSystem/useAsyncFs";
 import {
   DISBALE_AUTO_INPUT_FEATURES,
   HIGH_PRIORITY_REQUEST,
@@ -17,7 +17,6 @@ export const FILE_INDEX = "/.index/search.lunr.json";
 export const SEARCH_LIB = "/System/lunr/lunr.min.js";
 
 export const SEARCH_INPUT_PROPS = {
-  "aria-label": "Search",
   enterKeyHint: "search",
   inputMode: "search",
   name: "search",
@@ -76,7 +75,7 @@ const search = async (
     .trim()
     .replace(/\./g, " ")
     .replace(/\*~\^-\+/g, "");
-  const merged = new Map<string | number, Index.Result>();
+  const merged = new Map<number | string, Index.Result>();
 
   if (normalizedSearchTerm) {
     try {
@@ -103,7 +102,7 @@ const search = async (
   return [...merged.values()].map((result) => ({
     ...result,
     ref:
-      (Object.prototype.hasOwnProperty.call(basePaths, result.ref)
+      (Object.hasOwn(basePaths, result.ref)
         ? (basePaths[result.ref as keyof typeof basePaths] as string)
         : result.ref) || "",
   }));
@@ -212,7 +211,8 @@ export const fullSearch = async (
 
 export const useSearch = (searchTerm: string): Index.Result[] => {
   const [results, setResults] = useState([] as Index.Result[]);
-  const { readFile, rootFs } = useFileSystem();
+  const { readFile } = useFileSystemActions();
+  const rootFs = useRootFs();
 
   useEffect(() => {
     const updateResults = async (): Promise<void> => {

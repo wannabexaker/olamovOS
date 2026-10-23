@@ -1,36 +1,32 @@
-import { useMemo } from "react";
-import { useMenu } from "contexts/menu";
+import { useMenuActions } from "contexts/menu";
 import { type ContextMenuCapture } from "contexts/menu/useMenuContextState";
-import { useSession } from "contexts/session";
+import { useClockSource, useSessionActions } from "contexts/session";
 
 const useClockContextMenu = (
   toggleCalendar: (showCalendar?: boolean) => void
 ): ContextMenuCapture => {
-  const { contextMenu } = useMenu();
-  const { clockSource, setClockSource } = useSession();
+  const { contextMenu } = useMenuActions();
+  const { setClockSource } = useSessionActions();
+  const clockSource = useClockSource();
 
-  return useMemo(
-    () =>
-      contextMenu?.(() => {
-        toggleCalendar(false);
+  return contextMenu(() => {
+    toggleCalendar(false);
 
-        const isLocal = clockSource === "local";
+    const isLocal = clockSource === "local";
 
-        return [
-          {
-            action: () => setClockSource("local"),
-            label: "Local time",
-            toggle: isLocal,
-          },
-          {
-            action: () => setClockSource("ntp"),
-            label: "Server time",
-            toggle: !isLocal,
-          },
-        ];
-      }),
-    [clockSource, contextMenu, setClockSource, toggleCalendar]
-  );
+    return [
+      {
+        action: () => setClockSource("local"),
+        label: "Local time",
+        toggle: isLocal,
+      },
+      {
+        action: () => setClockSource("ntp"),
+        label: "Server time",
+        toggle: !isLocal,
+      },
+    ];
+  });
 };
 
 export default useClockContextMenu;

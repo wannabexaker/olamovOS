@@ -1,15 +1,19 @@
-import { type Props, type RndResizeCallback } from "react-rnd";
+import { useLayoutEffect, useState } from "react";
 import { type DraggableEventHandler } from "react-draggable";
-import { useCallback, useMemo } from "react";
+import { type Props, type RndResizeCallback } from "react-rnd";
+import { useTheme } from "styled-components";
+import {
+  coversViewport,
+  isWindowOutsideBounds,
+} from "components/system/Window/functions";
 import rndDefaults, {
   RESIZING_DISABLED,
   RESIZING_ENABLED,
 } from "components/system/Window/RndWindow/rndDefaults";
 import useDraggable from "components/system/Window/RndWindow/useDraggable";
 import useResizable from "components/system/Window/RndWindow/useResizable";
-import { isWindowOutsideBounds } from "components/system/Window/functions";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
+import { useProcess, useProcessesActions } from "contexts/process";
+import { useSessionActions, useWindowState } from "contexts/session";
 import { getWindowViewport, pxToNum } from "utils/functions";
 
 const enableIframeCapture = (enable = true): void =>
@@ -18,103 +22,115 @@ const enableIframeCapture = (enable = true): void =>
     iframe.style.pointerEvents = enable ? "initial" : "none";
   });
 
+const disableIframeCapture = (): void => enableIframeCapture(false);
+
 const useRnd = (id: string): Props => {
   const {
-    processes: {
-      [id]: {
-        allowResizing = true,
-        autoSizing = false,
-        lockAspectRatio = false,
-        maximized = false,
-      } = {},
-    },
-  } = useProcesses();
-  const { setWindowStates } = useSession();
+    allowResizing = true,
+    autoSizing = false,
+    hideMaximizeButton = false,
+    lockAspectRatio = false,
+    maximized = false,
+  } = useProcess(id);
+  const { maximize } = useProcessesActions();
+  const { setWindowStates } = useSessionActions();
+  const { maximized: wasMaximized } = useWindowState(id);
+  const {
+    sizes: { titleBar },
+  } = useTheme();
   const [size, setSize] = useResizable(id, autoSizing);
   const [position, setPosition] = useDraggable(id, size);
-  const onDragStop: DraggableEventHandler = useCallback(
-    (_event, { x, y }) => {
-      enableIframeCapture();
+  // Reopen as it was left, otherwise maximize only when the window would
+  // cover the viewport in both dimensions anyway
+  // eslint-disable-next-line react/hook-use-state
+  const [openMaximized] = useState(
+    () =>
+      allowResizing &&
+      !hideMaximizeButton &&
+      (wasMaximized ?? coversViewport(size))
+  );
+  const onDragStop: DraggableEventHandler = (_event, { x, y }) => {
+    enableIframeCapture();
 
-      const newPosition = { x, y };
+    const newPosition = { x, y };
 
-      if (
-        !isWindowOutsideBounds(
-          { position: newPosition, size },
-          getWindowViewport(),
-          true
-        )
-      ) {
-        setPosition(newPosition);
-        setWindowStates((currentWindowStates) => ({
-          ...currentWindowStates,
-          [id]: {
-            ...currentWindowStates[id],
-            position: newPosition,
-          },
-        }));
+    if (
+      !isWindowOutsideBounds(
+        { position: newPosition, size },
+        getWindowViewport(),
+        true
+      )
+    ) {
+      setPosition(newPosition);
+      setWindowStates((currentWindowStates) => ({
+        ...currentWindowStates,
+        [id]: {
+          ...currentWindowStates[id],
+          position: newPosition,
+        },
+      }));
+    }
+  };
+  const onResizeStop: RndResizeCallback = (
+    _event,
+    _direction,
+    { style: { height, transform, width } },
+    _delta,
+    resizePosition
+  ) => {
+    const [, x, y] = /translate\((-?\d+)px, (-?\d+)px\)/.exec(transform) || [];
+    const newPosition =
+      typeof x === "string" && typeof y === "string"
+        ? { x: pxToNum(x), y: pxToNum(y) }
+        : resizePosition;
+
+    enableIframeCapture();
+
+    const newSize = { height: pxToNum(height), width: pxToNum(width) };
+
+    if (newPosition.y < 0) {
+      if (lockAspectRatio) {
+        newSize.width *= 1 + newPosition.y / (newSize.height - titleBar.height);
       }
-    },
-    [id, setPosition, setWindowStates, size]
-  );
-  const onResizeStop: RndResizeCallback = useCallback(
-    (
-      _event,
-      _direction,
-      { style: { height, width, transform } },
-      _delta,
-      resizePosition
-    ) => {
-      const [, x, y] =
-        /translate\((-?\d+)px, (-?\d+)px\)/.exec(transform) || [];
-      const newPosition =
-        typeof x === "string" && typeof y === "string"
-          ? { x: pxToNum(x), y: pxToNum(y) }
-          : resizePosition;
 
-      enableIframeCapture();
+      newSize.height += newPosition.y;
+      newPosition.y = 0;
+    }
 
-      const newSize = { height: pxToNum(height), width: pxToNum(width) };
+    if (
+      !isWindowOutsideBounds(
+        { position: newPosition, size: newSize },
+        getWindowViewport(),
+        true
+      )
+    ) {
+      setSize(newSize);
+      setPosition(newPosition);
+      setWindowStates((currentWindowStates) => ({
+        ...currentWindowStates,
+        [id]: {
+          ...currentWindowStates[id],
+          position: newPosition,
+          size: newSize,
+        },
+      }));
+    }
+  };
+  const contentAspectRatio =
+    lockAspectRatio &&
+    Number(size.width) / (Number(size.height) - titleBar.height);
+  const enableResizing =
+    allowResizing && !maximized ? RESIZING_ENABLED : RESIZING_DISABLED;
 
-      if (newPosition.y < 0) {
-        newSize.height += newPosition.y;
-        newPosition.y = 0;
-      }
-
-      if (
-        !isWindowOutsideBounds(
-          { position: newPosition, size: newSize },
-          getWindowViewport(),
-          true
-        )
-      ) {
-        setSize(newSize);
-        setPosition(newPosition);
-        setWindowStates((currentWindowStates) => ({
-          ...currentWindowStates,
-          [id]: {
-            ...currentWindowStates[id],
-            position: newPosition,
-            size: newSize,
-          },
-        }));
-      }
-    },
-    [id, setPosition, setSize, setWindowStates]
-  );
-  const disableIframeCapture = useCallback(
-    () => enableIframeCapture(false),
-    []
-  );
-  const enableResizing = useMemo(
-    () => (allowResizing && !maximized ? RESIZING_ENABLED : RESIZING_DISABLED),
-    [allowResizing, maximized]
-  );
+  useLayoutEffect(() => {
+    if (openMaximized) maximize(id, true);
+  }, [id, maximize, openMaximized]);
 
   return {
     disableDragging: maximized,
     enableResizing,
-    lockAspectRatio,
+    lockAspectRatio: contentAspectRatio,
+    lockAspectRatioExtraHeight: lockAspectRatio ? titleBar.height : undefined,
     onDragStart: disableIframeCapture,
     onDragStop,
     onResizeStart: disableIframeCapture,

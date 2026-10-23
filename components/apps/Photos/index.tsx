@@ -1,5 +1,5 @@
 import { basename, dirname, extname, join } from "path";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ExitFullscreen,
   Fullscreen,
@@ -11,8 +11,8 @@ import usePanZoom, { panZoomConfig } from "components/apps/Photos/usePanZoom";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import useFileDrop from "components/system/Files/FileManager/useFileDrop";
 import useTitle from "components/system/Window/useTitle";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
+import { useFileSystemActions } from "contexts/fileSystem";
+import { useProcess, useProcessesActions } from "contexts/process";
 import { useViewport } from "contexts/viewport";
 import useDoubleClick from "hooks/useDoubleClick";
 import Button from "styles/common/Button";
@@ -28,33 +28,44 @@ import {
   haltEvent,
   label,
 } from "utils/functions";
+import { loadImageDecoder } from "utils/loaders";
 
-const { maxScale, minScale } = panZoomConfig;
+const { maxScale, minScale, step } = panZoomConfig;
+
+const ZOOM_KEYS = new Set(["-", "+", "="]);
+
+// Like Photos, a zoomed in photo moves the opposite way of the arrow key
+const PAN_STEPS: Record<string, [number, number]> = {
+  ArrowDown: [0, -1],
+  ArrowLeft: [1, 0],
+  ArrowRight: [-1, 0],
+  ArrowUp: [0, 1],
+};
 
 const Photos: FC<ComponentProcessProps> = ({ id }) => {
-  const { processes: { [id]: process } = {}, url: setUrl } = useProcesses();
-  const { componentWindow, closing = false, url = "" } = process || {};
+  const { url: setUrl } = useProcessesActions();
+  const { closing = false, componentWindow, url = "" } = useProcess(id);
   const [src, setSrc] = useState<Record<string, string>>({});
   const [brokenImage, setBrokenImage] = useState(false);
   const { prependFileToTitle } = useTitle(id);
-  const { readFile, readdir } = useFileSystem();
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const imageRef = useRef<HTMLImageElement | null>(null);
-  const imageContainerRef = useRef<HTMLDivElement | null>(null);
-  const { reset, scale, zoomIn, zoomOut, zoomToPoint } = usePanZoom(
+  const { readdir, readFile } = useFileSystemActions();
+  const [container, setContainer] = useState<HTMLDivElement | null>();
+  const [image, setImage] = useState<HTMLImageElement | null>();
+  const [imageContainer, setImageContainer] = useState<HTMLElement | null>();
+  const { pan, reset, scale, zoomIn, zoomOut, zoomToPoint } = usePanZoom(
     id,
-    imageRef.current,
-    imageContainerRef.current
+    image,
+    imageContainer
   );
   const { fullscreenElement, toggleFullscreen } = useViewport();
-  const loadPhoto = useCallback(async (): Promise<void> => {
+  const loadPhoto = async (): Promise<void> => {
     const ext = getExtension(url);
     const isNative = NATIVE_IMAGE_FORMATS.has(ext);
     const [initialContents, decoder] = await Promise.all([
       readFile(url),
       isNative
         ? Promise.resolve()
-        : import("utils/imageDecoder").then((m) => m.decodeImageToBuffer),
+        : loadImageDecoder().then((m) => m.decodeImageToBuffer),
     ]);
     let fileContents = initialContents;
 
@@ -77,43 +88,71 @@ const Photos: FC<ComponentProcessProps> = ({ id }) => {
       };
     });
     prependFileToTitle(basename(url));
-  }, [prependFileToTitle, readFile, reset, url]);
-  const onKeyDown = useCallback(
-    async ({ key }: KeyboardEvent): Promise<void> => {
-      // eslint-disable-next-line default-case
-      switch (key) {
-        case "ArrowRight":
-        case "ArrowLeft": {
-          const directory = await readdir(dirname(url));
-          const currentIndex = directory.indexOf(basename(url));
-          const nextPhoto = (index: number, next: boolean): void => {
-            if (index === -1) return;
+  };
+  const onKeyDown = async (event: KeyboardEvent): Promise<void> => {
+    const { altKey, ctrlKey, key, metaKey } = event;
+    const panStep = PAN_STEPS[key];
 
-            const nextIndex = index + (next ? 1 : -1);
+    // Like the zoom buttons, while Ctrl is left for browser zoom
+    if (
+      url &&
+      !brokenImage &&
+      !altKey &&
+      !ctrlKey &&
+      !metaKey &&
+      ZOOM_KEYS.has(key)
+    ) {
+      haltEvent(event);
+      if (key === "-") zoomOut?.();
+      else zoomIn?.();
+      return;
+    }
 
-            if (nextIndex === -1 || nextIndex === directory.length) {
-              return;
-            }
+    // Zoom steps can leave the scale a hair above its minimum
+    if (panStep && scale && scale >= minScale + step) {
+      const [stepX, stepY] = panStep;
+      // Panning is scaled by the zoom, so a step is a tenth of the view
+      const distance = (container?.clientWidth || 0) / 10 / scale;
 
-            const nextUrl = directory[nextIndex];
+      haltEvent(event);
+      pan?.(stepX * distance, stepY * distance, { relative: true });
+      return;
+    }
 
-            if (IMAGE_FILE_EXTENSIONS.has(getExtension(nextUrl))) {
-              setUrl(id, join(dirname(url), nextUrl));
-            } else {
-              nextPhoto(nextIndex, next);
-            }
-          };
+    // eslint-disable-next-line default-case
+    switch (key) {
+      case "ArrowRight":
+      case "ArrowLeft": {
+        const directory = await readdir(dirname(url));
+        const currentIndex = directory.indexOf(basename(url));
+        const nextPhoto = (index: number, next: boolean): void => {
+          if (index === -1) return;
 
-          nextPhoto(currentIndex, key === "ArrowRight");
+          const nextIndex = index + (next ? 1 : -1);
 
-          break;
-        }
+          if (nextIndex === -1 || nextIndex === directory.length) {
+            return;
+          }
+
+          const nextUrl = directory[nextIndex];
+
+          if (IMAGE_FILE_EXTENSIONS.has(getExtension(nextUrl))) {
+            setUrl(id, join(dirname(url), nextUrl));
+          } else {
+            nextPhoto(nextIndex, next);
+          }
+        };
+
+        nextPhoto(currentIndex, key === "ArrowRight");
+
+        break;
       }
-    },
-    [id, readdir, setUrl, url]
-  );
+    }
+  };
+  const isFullscreen = Boolean(container) && fullscreenElement === container;
 
   useEffect(() => {
+    // eslint-disable-next-line react/set-state-in-effect -- False positive: state is only set after an await
     if (url && !src[url] && !closing) loadPhoto();
   }, [closing, loadPhoto, src, url]);
 
@@ -125,13 +164,13 @@ const Photos: FC<ComponentProcessProps> = ({ id }) => {
 
   return (
     <StyledPhotos
-      ref={containerRef}
+      ref={setContainer}
       $showImage={Boolean(src[url] && !brokenImage)}
       className={url ? "" : "drop"}
       onContextMenu={haltEvent}
       {...useFileDrop({ id })}
     >
-      <nav className="top">
+      <nav className="top" role="presentation">
         <Button
           disabled={!url || scale === maxScale || brokenImage}
           onClick={zoomIn}
@@ -148,7 +187,7 @@ const Photos: FC<ComponentProcessProps> = ({ id }) => {
         </Button>
       </nav>
       <figure
-        ref={imageContainerRef}
+        ref={setImageContainer}
         {...useDoubleClick((event) => {
           if (scale === minScale) {
             zoomToPoint?.(minScale * 2, event, { animate: true });
@@ -158,7 +197,7 @@ const Photos: FC<ComponentProcessProps> = ({ id }) => {
         })}
       >
         <img
-          ref={imageRef}
+          ref={setImage}
           alt={basename(url, extname(url))}
           decoding="async"
           loading="eager"
@@ -176,21 +215,17 @@ const Photos: FC<ComponentProcessProps> = ({ id }) => {
           </div>
         )}
       </figure>
-      <nav className="bottom">
+      <nav className="bottom" role="presentation">
         <Button
           disabled={!url}
-          onClick={() => toggleFullscreen(containerRef.current, "show")}
-          {...label("Full-screen")}
+          onClick={() => toggleFullscreen(container, "show")}
+          {...label(isFullscreen ? "Exit full-screen" : "Full-screen")}
         >
-          {fullscreenElement === containerRef.current ? (
-            <ExitFullscreen />
-          ) : (
-            <Fullscreen />
-          )}
+          {isFullscreen ? <ExitFullscreen /> : <Fullscreen />}
         </Button>
       </nav>
     </StyledPhotos>
   );
 };
 
-export default memo(Photos);
+export default Photos;

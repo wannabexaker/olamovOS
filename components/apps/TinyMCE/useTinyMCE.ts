@@ -1,7 +1,7 @@
 import { basename, dirname, extname } from "path";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type Editor, type NotificationSpec } from "tinymce";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { DEFAULT_SAVE_PATH, config } from "components/apps/TinyMCE/config";
+import { config, DEFAULT_SAVE_PATH } from "components/apps/TinyMCE/config";
 import {
   draggableEditor,
   setReadOnlyMode,
@@ -11,16 +11,28 @@ import { type ContainerHookProps } from "components/system/Apps/AppContainer";
 import { getModifiedTime } from "components/system/Files/FileEntry/functions";
 import useFileDrop from "components/system/Files/FileManager/useFileDrop";
 import useTitle from "components/system/Window/useTitle";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
-import { DEFAULT_LOCALE, DEFAULT_SCROLLBAR_WIDTH } from "utils/constants";
-import { getExtension, loadFiles } from "utils/functions";
+import { useFileSystemActions } from "contexts/fileSystem";
+import { useProcess, useProcessesActions } from "contexts/process";
+import { useSessionActions } from "contexts/session";
 import { useLinkHandler } from "hooks/useLinkHandler";
+import {
+  DEFAULT_LOCALE,
+  DEFAULT_SCROLLBAR_WIDTH,
+  ONE_TIME_PASSIVE_EVENT,
+} from "utils/constants";
+import { getExtension, loadFiles } from "utils/functions";
 
 const TITLE_DATE_FORMATTER = new Intl.DateTimeFormat(DEFAULT_LOCALE, {
   dateStyle: "medium",
 });
+
+const loadRtfJs = (): Promise<unknown> => import("rtf.js");
+
+const scrollEditorToTop = (editor: Editor): void => {
+  const contentDocument = editor.iframeElement?.contentDocument;
+
+  if (contentDocument) contentDocument.documentElement.scrollTop = 0;
+};
 
 const useTinyMCE = ({
   containerRef,
@@ -28,28 +40,25 @@ const useTinyMCE = ({
   setLoading,
   url,
 }: ContainerHookProps): void => {
-  const { processes: { [id]: { libs = [] } = {} } = {}, url: setUrl } =
-    useProcesses();
+  const { url: setUrl } = useProcessesActions();
+  const { libs = [] } = useProcess(id);
   const [editor, setEditor] = useState<Editor>();
   const { prependFileToTitle } = useTitle(id);
-  const { readFile, stat, updateFolder, writeFile } = useFileSystem();
+  const { readFile, stat, updateFolder, writeFile } = useFileSystemActions();
   const { onDragOver, onDrop } = useFileDrop({ id });
-  const { setForegroundId } = useSession();
-  const updateTitle = useCallback(
-    async (currentUrl: string) => {
-      const modifiedDate = new Date(
-        getModifiedTime(currentUrl, await stat(currentUrl))
-      );
-      const date = TITLE_DATE_FORMATTER.format(modifiedDate);
+  const { setForegroundId } = useSessionActions();
+  const updateTitle = async (currentUrl: string): Promise<void> => {
+    const modifiedDate = new Date(
+      getModifiedTime(currentUrl, await stat(currentUrl))
+    );
+    const date = TITLE_DATE_FORMATTER.format(modifiedDate);
 
-      prependFileToTitle(
-        `${basename(currentUrl, extname(currentUrl))} (${date})`
-      );
-    },
-    [prependFileToTitle, stat]
-  );
+    prependFileToTitle(
+      `${basename(currentUrl, extname(currentUrl))} (${date})`
+    );
+  };
   const openLink = useLinkHandler();
-  const linksToProcesses = useCallback(() => {
+  const linksToProcesses = (): void => {
     const iframe = containerRef.current?.querySelector("iframe");
 
     if (iframe?.contentWindow) {
@@ -66,8 +75,8 @@ const useTinyMCE = ({
         })
       );
     }
-  }, [containerRef, editor?.mode, openLink]);
-  const loadFile = useCallback(async () => {
+  };
+  const loadFile = async (): Promise<void> => {
     if (editor) {
       const setupSaveCallback = (): void => {
         editor.options.set("save_onsavecallback", async () => {
@@ -80,15 +89,13 @@ const useTinyMCE = ({
             type: "success",
           };
           const saveUrl = url || DEFAULT_SAVE_PATH;
+          const writeUrl =
+            getExtension(saveUrl) === ".rtf"
+              ? saveUrl.replace(".rtf", ".whtml")
+              : saveUrl;
 
           try {
-            await writeFile(
-              getExtension(saveUrl) === ".rtf"
-                ? saveUrl.replace(".rtf", ".whtml")
-                : saveUrl,
-              editor.getContent(),
-              true
-            );
+            await writeFile(writeUrl, editor.getContent(), true);
             updateFolder(dirname(saveUrl), basename(saveUrl));
             updateTitle(saveUrl);
           } catch {
@@ -98,23 +105,35 @@ const useTinyMCE = ({
 
           editor.notificationManager.open(saveSpec);
 
-          const notification = editor.notificationManager
-            .getNotifications()?.[0]
-            ?.getEl()?.parentElement;
+          const notification =
+            editor.notificationManager.getNotifications()?.[0];
+          const toast = notification?.getEl()?.parentElement;
           const mceContainer = editor.editorContainer;
 
           if (
-            notification instanceof HTMLElement &&
+            toast instanceof HTMLElement &&
             mceContainer instanceof HTMLElement
           ) {
-            mceContainer.append(notification);
-            notification.setAttribute(
-              "style",
-              "position: absolute; right: 0; bottom: 0; padding: 33px 25px;"
-            );
-            notification
-              .querySelector("[role=alert]")
-              ?.setAttribute("style", "opacity: 1;");
+            // TinyMCE's own reposition moves the toast back out & restyles it
+            notification.reposition = () => {
+              mceContainer.append(toast);
+              toast.setAttribute(
+                "style",
+                "position: absolute; right: 0; bottom: 0; padding: 33px 25px;"
+              );
+              toast
+                .querySelector("[role=alert]")
+                ?.setAttribute("style", "opacity: 1;");
+            };
+            notification.reposition();
+            // TinyMCE only handles clicks from within its own container
+            toast
+              .querySelector("button")
+              ?.addEventListener(
+                "click",
+                notification.close,
+                ONE_TIME_PASSIVE_EVENT
+              );
           }
 
           if (saveUrl === DEFAULT_SAVE_PATH) updateTitle(saveUrl);
@@ -129,7 +148,7 @@ const useTinyMCE = ({
         setReadOnlyMode(editor, setupSaveCallback);
 
         if (getExtension(url) === ".rtf") {
-          const { RTFJS } = (await import("rtf.js")) as unknown as IRTFJS;
+          const { RTFJS } = (await loadRtfJs()) as IRTFJS;
           const rtfDoc = new RTFJS.Document(fileContents);
           const rtfHtml = await rtfDoc.render();
 
@@ -142,22 +161,12 @@ const useTinyMCE = ({
 
         linksToProcesses();
 
-        if (editor.iframeElement?.contentDocument) {
-          editor.iframeElement.contentDocument.documentElement.scrollTop = 0;
-        }
+        scrollEditorToTop(editor);
       }
 
       if (url) updateTitle(url);
     }
-  }, [
-    editor,
-    linksToProcesses,
-    readFile,
-    updateFolder,
-    updateTitle,
-    url,
-    writeFile,
-  ]);
+  };
   const initEditor = useRef(false);
 
   useEffect(() => {
@@ -233,12 +242,9 @@ const useTinyMCE = ({
     if (editor) loadFile();
   }, [editor, loadFile]);
 
-  useEffect(
-    () => () => {
-      window.setTimeout(() => editor?.destroy(), 0);
-    },
-    [editor]
-  );
+  // Layout cleanup runs before the window leaves the DOM, Firefox throws if
+  // TinyMCE tears down after its iframe is detached
+  useLayoutEffect(() => () => editor?.destroy(), [editor]);
 };
 
 export default useTinyMCE;

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { useProcesses } from "contexts/process";
+import { useState } from "react";
+import { useProcessesActions } from "contexts/process";
 
 type History = {
   canGoBack: boolean;
@@ -11,28 +11,23 @@ type History = {
 };
 
 const useHistory = (url: string, id: string): History => {
-  const { url: changeUrl } = useProcesses();
+  const { url: changeUrl } = useProcessesActions();
   const [currentUrl, setCurrentUrl] = useState(url);
   const [history, setHistory] = useState<string[]>(() => [url]);
   const [position, setPosition] = useState<number>(0);
-  const moveHistory = useCallback(
-    (step: number): void => {
-      const newPosition = position + step;
+  const moveHistory = (step: number): void => {
+    const newPosition = position + step;
 
-      setPosition(newPosition);
-      setCurrentUrl(history[newPosition]);
-      changeUrl(id, history[newPosition]);
-    },
-    [changeUrl, history, id, position]
-  );
+    setPosition(newPosition);
+    setCurrentUrl(history[newPosition]);
+    changeUrl(id, history[newPosition]);
+  };
 
-  useEffect(() => {
-    if (url !== currentUrl) {
-      setPosition(position + 1);
-      setCurrentUrl(url);
-      setHistory([...history.slice(0, position + 1), url]);
-    }
-  }, [currentUrl, history, position, url]);
+  if (url !== currentUrl) {
+    setPosition(position + 1);
+    setCurrentUrl(url);
+    setHistory([...history.slice(0, position + 1), url]);
+  }
 
   return {
     canGoBack: position > 0,

@@ -1,27 +1,28 @@
 import { basename } from "path";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GoTo, Refresh } from "components/apps/FileExplorer/NavigationIcons";
 import StyledAddressBar from "components/apps/FileExplorer/StyledAddressBar";
 import useAddressBarContextMenu from "components/apps/FileExplorer/useAddressBarContextMenu";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
+import { getProcessByFileExtension } from "components/system/Files/FileEntry/functions";
+import { useFileSystemActions } from "contexts/fileSystem";
+import { useProcess, useProcessesActions } from "contexts/process";
+import { useSessionActions } from "contexts/session";
 import Button from "styles/common/Button";
 import Icon from "styles/common/Icon";
 import {
   DISBALE_AUTO_INPUT_FEATURES,
+  PREVENT_SCROLL,
   ROOT_NAME,
   TRANSITIONS_IN_MILLISECONDS,
 } from "utils/constants";
 import { getExtension, label, notFound } from "utils/functions";
-import { getProcessByFileExtension } from "components/system/Files/FileEntry/functions";
-import { useSession } from "contexts/session";
+import { isComposingKey } from "utils/keyboard";
 
 type AddressBarProps = {
   id: string;
 };
 
 export const ADDRESS_INPUT_PROPS = {
-  "aria-label": "Address",
   enterKeyHint: "go",
   inputMode: "url",
   name: "address",
@@ -36,26 +37,18 @@ const AddressBar: FCWithRef<HTMLInputElement, AddressBarProps> = ({
   ref: addressBarRef,
 }) => {
   const actionButtonRef = useRef<HTMLButtonElement | null>(null);
-  const {
-    open,
-    url: changeUrl,
-    processes: {
-      [id]: { icon, url = "" },
-    },
-  } = useProcesses();
-  const displayName = useMemo(() => basename(url) || ROOT_NAME, [url]);
+  const { open, url: changeUrl } = useProcessesActions();
+  const { componentWindow, icon, url = "" } = useProcess(id);
+  const displayName = basename(url) || ROOT_NAME;
   const [addressBar, setAddressBar] = useState(displayName);
-  const { exists, stat, updateFolder } = useFileSystem();
-  const { updateRecentFiles } = useSession();
-  const inputing = useMemo(
-    () =>
-      addressBar !== displayName &&
-      addressBar !== url &&
-      addressBarRef &&
-      document.activeElement === addressBarRef.current,
-    [addressBar, addressBarRef, displayName, url]
-  );
-  const goToAddress = useCallback(async () => {
+  const { exists, stat, updateFolder } = useFileSystemActions();
+  const { updateRecentFiles } = useSessionActions();
+  // Stays set while focus moves to the action button so its click can submit
+  const [focused, setFocused] = useState(false);
+  // Only focusing selects the path, so typing it out isn't selected
+  const selectOnFocusRef = useRef(false);
+  const inputing = focused && addressBar !== displayName && addressBar !== url;
+  const goToAddress = async (): Promise<void> => {
     if (addressBar && (await exists(addressBar))) {
       if ((await stat(addressBar)).isDirectory()) changeUrl(id, addressBar);
       else {
@@ -71,22 +64,19 @@ const AddressBar: FCWithRef<HTMLInputElement, AddressBarProps> = ({
       notFound(addressBar);
     }
 
-    addressBarRef?.current?.blur();
-  }, [
-    addressBar,
-    addressBarRef,
-    changeUrl,
-    exists,
-    id,
-    open,
-    stat,
-    updateRecentFiles,
-  ]);
+    // Like Windows, focus moves from the address to the items
+    if (document.activeElement === addressBarRef?.current) {
+      componentWindow
+        ?.querySelector<HTMLElement>("ol[tabindex]")
+        ?.focus(PREVENT_SCROLL);
+    }
+  };
 
   useEffect(() => {
     if (addressBarRef?.current) {
       if (addressBar === url) {
-        addressBarRef.current.select();
+        if (selectOnFocusRef.current) addressBarRef.current.select();
+        selectOnFocusRef.current = false;
       } else if (addressBar === displayName) {
         window.getSelection()?.removeAllRanges();
       } else if (document.activeElement !== addressBarRef.current) {
@@ -97,19 +87,31 @@ const AddressBar: FCWithRef<HTMLInputElement, AddressBarProps> = ({
 
   return (
     <StyledAddressBar>
-      <Icon alt={displayName} imgSize={16} src={icon} />
+      <Icon alt="" imgSize={16} src={icon} />
       <input
         ref={addressBarRef}
+        aria-label="Address"
         className={inputing ? "inputing" : ""}
         onBlurCapture={({ relatedTarget }) => {
           if (actionButtonRef.current !== relatedTarget) {
+            setFocused(false);
             setAddressBar(displayName);
           }
         }}
         onChange={({ target }) => setAddressBar(target.value)}
-        onFocusCapture={() => setAddressBar(url)}
-        onKeyDown={({ key }) => {
-          if (key === "Enter") goToAddress();
+        onFocusCapture={() => {
+          selectOnFocusRef.current = true;
+          setFocused(true);
+          setAddressBar(url);
+        }}
+        onKeyDown={(event) => {
+          if (isComposingKey(event.nativeEvent)) return;
+          if (event.key === "Enter") goToAddress();
+          else if (event.key === "Escape" && inputing) {
+            // Like Windows, what was typed is undone
+            event.preventDefault();
+            setAddressBar(url);
+          }
         }}
         value={addressBar}
         {...ADDRESS_INPUT_PROPS}
@@ -125,10 +127,10 @@ const AddressBar: FCWithRef<HTMLInputElement, AddressBarProps> = ({
           else updateFolder(url);
         }}
         onFocusCapture={() =>
-          setTimeout(
-            () => setAddressBar(displayName),
-            TRANSITIONS_IN_MILLISECONDS.DOUBLE_CLICK / 2
-          )
+          setTimeout(() => {
+            setFocused(document.activeElement === addressBarRef?.current);
+            setAddressBar(displayName);
+          }, TRANSITIONS_IN_MILLISECONDS.DOUBLE_CLICK / 2)
         }
         {...label(
           inputing ? `Go to "${addressBar}"` : `Refresh "${displayName}" (F5)`
@@ -140,4 +142,4 @@ const AddressBar: FCWithRef<HTMLInputElement, AddressBarProps> = ({
   );
 };
 
-export default memo(AddressBar);
+export default AddressBar;

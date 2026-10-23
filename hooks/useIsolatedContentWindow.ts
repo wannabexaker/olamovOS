@@ -1,36 +1,12 @@
-import {
-  useState,
-  useEffect,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-} from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import useFileDrop from "components/system/Files/FileManager/useFileDrop";
+import { useMenuIsOpen } from "contexts/menu";
+import { getProcess, useProcess } from "contexts/process";
+import { useForegroundId, useSessionActions } from "contexts/session";
 import { PREVENT_SCROLL } from "utils/constants";
-import { useMenu } from "contexts/menu";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
+import { keepCanvasesReadable } from "utils/readableCanvas";
 
 type ContentWindow = Window & typeof globalThis;
-
-const alwaysPreserveDrawingBuffer = (contentWindow: ContentWindow): void => {
-  // eslint-disable-next-line @typescript-eslint/unbound-method
-  const canvasGetContext = contentWindow.HTMLCanvasElement.prototype.getContext;
-
-  // eslint-disable-next-line no-param-reassign
-  contentWindow.HTMLCanvasElement.prototype.getContext = function getContext(
-    this: typeof canvasGetContext,
-    contextId: "webgl" | "webgl2",
-    options?: WebGLContextAttributes
-  ) {
-    if (contextId === "webgl" || contextId === "webgl2") {
-      // eslint-disable-next-line no-param-reassign
-      options = Object.assign(options || {}, { preserveDrawingBuffer: true });
-    }
-
-    return canvasGetContext.call(this, contextId, options);
-  } as typeof canvasGetContext;
-};
 
 const createCanvas = (contentDocument: Document): HTMLCanvasElement => {
   const canvas = contentDocument.createElement("canvas");
@@ -39,6 +15,8 @@ const createCanvas = (contentDocument: Document): HTMLCanvasElement => {
   canvas.style.width = "100%";
   canvas.style.height = "100%";
   canvas.tabIndex = -1;
+  canvas.setAttribute("role", "img");
+  canvas.setAttribute("aria-label", "Screen");
 
   contentDocument.body.append(canvas);
 
@@ -52,7 +30,7 @@ const createIframe = (
 ): HTMLIFrameElement => {
   const iframe = document.createElement("iframe");
 
-  iframe.title = id;
+  iframe.title = getProcess(id)?.title || id;
 
   iframe.style.backgroundColor = "transparent";
   iframe.style.border = "0";
@@ -64,7 +42,7 @@ const createIframe = (
   const contentDocument = iframe.contentDocument as Document;
 
   contentDocument.open();
-  // eslint-disable-next-line deprecation/deprecation
+  // eslint-disable-next-line typescript/no-deprecated
   contentDocument.write(`
     <!DOCTYPE html>
     ${styles ? `<head><style>${styles}</style></head>` : "<head />"}
@@ -97,14 +75,11 @@ const useIsolatedContentWindow = (
   const [container, setContainer] = useState<HTMLDivElement>();
   const [contentWindow, setContentWindow] = useState<ContentWindow>();
   const { onDragOver, onDrop } = useFileDrop({ id });
-  const { processes: { [id]: { maximized } = {} } = {} } = useProcesses();
-  const { foregroundId, setForegroundId } = useSession();
-  const { menu } = useMenu();
-  const isContextMenuOpen = useMemo(
-    () => (menu?.items?.length || 0) > 0,
-    [menu]
-  );
-  const createContentWindow = useCallback((): ContentWindow | undefined => {
+  const { maximized } = useProcess(id);
+  const { setForegroundId } = useSessionActions();
+  const foregroundId = useForegroundId();
+  const isContextMenuOpen = useMenuIsOpen();
+  const createContentWindow = (): ContentWindow | undefined => {
     if (!container) return undefined;
 
     container.querySelector("iframe")?.remove();
@@ -112,7 +87,7 @@ const useIsolatedContentWindow = (
     const iframe = createIframe(id, container, styles);
     const newContentWindow = iframe.contentWindow as ContentWindow;
 
-    alwaysPreserveDrawingBuffer(newContentWindow);
+    keepCanvasesReadable(newContentWindow);
 
     let canvas: HTMLCanvasElement;
 
@@ -134,7 +109,7 @@ const useIsolatedContentWindow = (
     setContentWindow(newContentWindow);
 
     return newContentWindow;
-  }, [container, id, onDragOver, onDrop, setForegroundId, styles, withCanvas]);
+  };
 
   useLayoutEffect(() => {
     if (contentWindow && foregroundId === id && !isContextMenuOpen) {
@@ -147,13 +122,13 @@ const useIsolatedContentWindow = (
         } else contentWindow.focus();
       });
     }
-    // eslint-disable-next-line react-hooks-addons/no-unused-deps
   }, [
     contentWindow,
     focusFunction,
     foregroundId,
     id,
     isContextMenuOpen,
+    // eslint-disable-next-line react/exhaustive-effect-dependencies
     maximized,
     withCanvas,
   ]);
@@ -174,10 +149,7 @@ const useIsolatedContentWindow = (
     }
   }, [container, containerRef]);
 
-  return useMemo(
-    () => (container ? createContentWindow : undefined),
-    [container, createContentWindow]
-  );
+  return container ? createContentWindow : undefined;
 };
 
 export default useIsolatedContentWindow;

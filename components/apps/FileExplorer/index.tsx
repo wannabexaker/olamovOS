@@ -1,12 +1,13 @@
 import { basename } from "path";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import Navigation from "components/apps/FileExplorer/Navigation";
 import StyledFileExplorer from "components/apps/FileExplorer/StyledFileExplorer";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import { getIconFromIni } from "components/system/Files/FileEntry/functions";
 import FileManager from "components/system/Files/FileManager";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
+import { useFs, useRootFs } from "contexts/fileSystem";
+import { getMountUrl, isMountedFolder } from "contexts/fileSystem/core";
+import { useProcess, useProcessesActions } from "contexts/process";
 import {
   COMPRESSED_FOLDER_ICON,
   FOLDER_ICON,
@@ -15,26 +16,42 @@ import {
   ROOT_NAME,
 } from "utils/constants";
 import { haltEvent } from "utils/functions";
-import { getMountUrl, isMountedFolder } from "contexts/fileSystem/core";
+import { isEditableElement } from "utils/keyboard";
+
+const NAVIGATION_BUTTONS: Record<string, string> = {
+  ARROWLEFT: "back",
+  ARROWRIGHT: "forward",
+  ARROWUP: "up",
+};
 
 const FileExplorer: FC<ComponentProcessProps> = ({ id }) => {
   const {
     icon: setProcessIcon,
     title,
-    processes: { [id]: process },
     url: setProcessUrl,
-  } = useProcesses();
-  const { componentWindow, closing, icon = "", url = "" } = process || {};
-  const { fs, rootFs } = useFileSystem();
-  const [currentUrl, setCurrentUrl] = useState(url);
+  } = useProcessesActions();
+  const { closing, componentWindow, icon = "", url = "" } = useProcess(id);
+  const fs = useFs();
+  const rootFs = useRootFs();
+  const currentUrl = useRef(url);
   const addressBarRef = useRef<HTMLInputElement | null>(null);
   const searchBarRef = useRef<HTMLInputElement | null>(null);
   const directoryName = basename(url);
   const mountUrl = getMountUrl(url, rootFs?.mntMap || {});
-  const onKeyDown = useCallback((event: KeyboardEvent): void => {
+  const onKeyDown = (event: KeyboardEvent): void => {
     const eventKey = event.key.toUpperCase();
+    // Text boxes keep these, which move by word on a Mac
+    const navigationButton =
+      event.altKey &&
+      !isEditableElement(event.target) &&
+      NAVIGATION_BUTTONS[eventKey];
 
-    if (event.altKey && eventKey === "D") {
+    if (navigationButton) {
+      haltEvent(event);
+      componentWindow
+        ?.querySelector<HTMLButtonElement>(`nav > button.${navigationButton}`)
+        ?.click();
+    } else if (event.altKey && eventKey === "D") {
       haltEvent(event);
       addressBarRef.current?.focus(PREVENT_SCROLL);
     } else if (
@@ -43,22 +60,28 @@ const FileExplorer: FC<ComponentProcessProps> = ({ id }) => {
     ) {
       haltEvent(event);
       searchBarRef.current?.focus(PREVENT_SCROLL);
-    } else {
-      const fileManagerEntry = (event?.target as HTMLElement)?.querySelector(
-        "ol li button"
-      );
-
-      fileManagerEntry?.dispatchEvent(
+    } else if (
+      event.target === componentWindow &&
+      // The Menu key on the window already opens the menu of its items
+      eventKey !== "CONTEXTMENU" &&
+      // Like Explorer, keys on the window go to its items
+      componentWindow.querySelector("ol[tabindex]")?.dispatchEvent(
         new KeyboardEvent("keydown", {
+          altKey: event.altKey,
           bubbles: true,
           cancelable: true,
+          code: event.code,
           ctrlKey: event.ctrlKey,
           key: event.key,
+          metaKey: event.metaKey,
           shiftKey: event.shiftKey,
         })
-      );
+      ) === false
+    ) {
+      // What the items did with a key, like F5, the page mustn't do too
+      event.preventDefault();
     }
-  }, []);
+  };
 
   useEffect(() => {
     if (url) {
@@ -66,7 +89,7 @@ const FileExplorer: FC<ComponentProcessProps> = ({ id }) => {
 
       if (
         !icon ||
-        url !== currentUrl ||
+        url !== currentUrl.current ||
         (mountUrl && icon !== MOUNTED_FOLDER_ICON) ||
         icon === FOLDER_ICON
       ) {
@@ -87,11 +110,10 @@ const FileExplorer: FC<ComponentProcessProps> = ({ id }) => {
           });
         }
 
-        setCurrentUrl(url);
+        currentUrl.current = url;
       }
     }
   }, [
-    currentUrl,
     directoryName,
     fs,
     icon,
@@ -135,4 +157,4 @@ const FileExplorer: FC<ComponentProcessProps> = ({ id }) => {
   null;
 };
 
-export default memo(FileExplorer);
+export default FileExplorer;

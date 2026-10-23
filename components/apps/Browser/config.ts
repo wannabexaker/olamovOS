@@ -1,4 +1,5 @@
 import { type ProxyState } from "components/apps/Browser/useProxyMenu";
+import { PROJECTS } from "components/apps/MyProjects/projects";
 import { get9pModifiedTime } from "contexts/fileSystem/core";
 import { FAVICON_BASE_PATH } from "utils/constants";
 
@@ -24,7 +25,6 @@ export const SURF_TO_MISC = {
   icon: "/Users/Public/Documents/OldSite/favicon.ico",
   name: "The Ultimate Misc Page",
   path: "/Users/Public/Documents/OldSite/index.html",
-  // eslint-disable-next-line sonarjs/no-clear-text-protocols
   url: "http://surf.to/misc",
 };
 
@@ -34,6 +34,15 @@ export const bookmarks: Bookmark[] = [
     name: "Olamov OS",
     url: "https://olamov.com/",
   },
+  {
+    icon: "https://wannabexaker.github.io/favicon.ico",
+    name: "Portfolio",
+    url: "https://wannabexaker.github.io/",
+  },
+  // The dock's projects; Fit Sentry's Play Store page refuses to be framed.
+  ...PROJECTS.filter(({ embeddable }) => embeddable).map(
+    ({ icon, name, url }) => ({ icon, name, url })
+  ),
   {
     icon: "/System/Icons/Favicons/dir.webp",
     name: "Index of /",
@@ -60,11 +69,6 @@ export const bookmarks: Bookmark[] = [
     icon: "/System/Icons/webamp.webp",
     name: "Winamp Skin Museum",
     url: "https://skins.webamp.org/",
-  },
-  {
-    icon: "/System/Icons/Favicons/aos.webp",
-    name: "AaronOS",
-    url: "https://aaronos.dev/",
   },
 ];
 

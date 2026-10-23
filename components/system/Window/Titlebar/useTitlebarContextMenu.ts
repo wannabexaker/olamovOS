@@ -1,4 +1,3 @@
-import { useCallback, useMemo } from "react";
 import {
   CLOSE,
   MAXIMIZE,
@@ -9,26 +8,21 @@ import {
   RESTORE_DISABLED,
 } from "components/system/Window/Titlebar/Buttons";
 import useWindowActions from "components/system/Window/Titlebar/useWindowActions";
-import { useMenu } from "contexts/menu";
+import { useMenuActions } from "contexts/menu";
 import {
   type ContextMenuCapture,
   type MenuItem,
 } from "contexts/menu/useMenuContextState";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
-import { MENU_SEPERATOR } from "utils/constants";
+import { useProcess } from "contexts/process";
+import { useSessionActions } from "contexts/session";
+import { MENU_SEPERATOR, SYSTEM_MENU } from "utils/constants";
+import { isKeyboardNavigating } from "utils/keyboard";
 
 const useTitlebarContextMenu = (id: string): ContextMenuCapture => {
-  const { contextMenu } = useMenu();
+  const { contextMenu } = useMenuActions();
   const { onClose, onMaximize, onMinimize } = useWindowActions(id);
-  const {
-    processes: { [id]: process },
-  } = useProcesses();
-  const { setForegroundId } = useSession();
-  const focusWindow = useCallback(
-    () => setForegroundId(id),
-    [id, setForegroundId]
-  );
+  const { setForegroundId } = useSessionActions();
+  const focusWindow = (): void => setForegroundId(id);
   const {
     allowResizing = true,
     hideMaximizeButton,
@@ -38,76 +32,58 @@ const useTitlebarContextMenu = (id: string): ContextMenuCapture => {
     mute,
     muted,
     unmute,
-  } = process || {};
+  } = useProcess(id);
 
-  return useMemo(
-    () =>
-      contextMenu?.(() => {
-        const isMaxOrMin = maximized || minimized;
-        const showMaxOrMin = !hideMaximizeButton || !hideMinimizeButton;
-        const canMute =
-          typeof mute === "function" && typeof unmute === "function";
+  return contextMenu(() => {
+    const isMaxOrMin = maximized || minimized;
+    const showMaxOrMin = !hideMaximizeButton || !hideMinimizeButton;
+    const canMute = typeof mute === "function" && typeof unmute === "function";
 
-        focusWindow();
+    // Like Windows, a menu from the keyboard leaves focus where it opened from
+    if (!isKeyboardNavigating()) focusWindow();
 
-        return [
-          showMaxOrMin && {
-            action: () => {
-              if (minimized) onMinimize();
-              else onMaximize();
+    return [
+      showMaxOrMin && {
+        action: () => {
+          if (minimized) onMinimize(true);
+          else onMaximize();
 
-              focusWindow();
+          focusWindow();
+        },
+        disabled: !isMaxOrMin,
+        icon: isMaxOrMin ? RESTORE : RESTORE_DISABLED,
+        label: "Restore",
+      },
+      !hideMinimizeButton && {
+        action: onMinimize,
+        disabled: minimized,
+        icon: minimized ? MINIMIZE_DISABLED : MINIMIZE,
+        label: "Minimize",
+      },
+      !hideMaximizeButton && {
+        action: onMaximize,
+        disabled: isMaxOrMin || !allowResizing,
+        icon: isMaxOrMin ? MAXIMIZE_DISABLED : MAXIMIZE,
+        label: "Maximize",
+      },
+      showMaxOrMin && MENU_SEPERATOR,
+      ...(canMute
+        ? [
+            {
+              action: () => (muted ? unmute() : mute()),
+              label: muted ? "Unmute" : "Mute",
             },
-            disabled: !isMaxOrMin,
-            icon: isMaxOrMin ? RESTORE : RESTORE_DISABLED,
-            label: "Restore",
-          },
-          !hideMinimizeButton && {
-            action: onMinimize,
-            disabled: minimized,
-            icon: minimized ? MINIMIZE_DISABLED : MINIMIZE,
-            label: "Minimize",
-          },
-          !hideMaximizeButton && {
-            action: onMaximize,
-            disabled: isMaxOrMin || !allowResizing,
-            icon: isMaxOrMin ? MAXIMIZE_DISABLED : MAXIMIZE,
-            label: "Maximize",
-          },
-          showMaxOrMin && MENU_SEPERATOR,
-          ...(canMute
-            ? [
-                {
-                  action: () => (muted ? unmute() : mute()),
-                  label: muted ? "Unmute" : "Mute",
-                },
-                MENU_SEPERATOR,
-              ]
-            : []),
-          {
-            action: onClose,
-            icon: CLOSE,
-            label: "Close",
-            primary: true,
-          },
-        ].filter(Boolean) as MenuItem[];
-      }),
-    [
-      allowResizing,
-      contextMenu,
-      focusWindow,
-      hideMaximizeButton,
-      hideMinimizeButton,
-      maximized,
-      minimized,
-      mute,
-      muted,
-      onClose,
-      onMaximize,
-      onMinimize,
-      unmute,
-    ]
-  );
+            MENU_SEPERATOR,
+          ]
+        : []),
+      {
+        action: onClose,
+        icon: CLOSE,
+        label: "Close",
+        primary: true,
+      },
+    ].filter(Boolean) as MenuItem[];
+  }, SYSTEM_MENU);
 };
 
 export default useTitlebarContextMenu;

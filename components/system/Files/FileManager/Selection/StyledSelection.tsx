@@ -1,4 +1,3 @@
-import { memo } from "react";
 import styled, { createGlobalStyle } from "styled-components";
 
 const NoGlobalPointerEvents = createGlobalStyle`
@@ -17,8 +16,8 @@ export const StyledSelectionComponent = styled.span`
 const StyledSelection: FC<React.HTMLAttributes<HTMLSpanElement>> = (props) => (
   <>
     <NoGlobalPointerEvents />
-    <StyledSelectionComponent {...props} />
+    <StyledSelectionComponent aria-hidden="true" {...props} />
   </>
 );
 
-export default memo(StyledSelection);
+export default StyledSelection;

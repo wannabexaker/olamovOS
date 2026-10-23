@@ -1,5 +1,5 @@
+import { useEffect, useRef, useState } from "react";
 import { useTheme } from "styled-components";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
 import SidebarButton, {
   type SidebarButtons,
 } from "components/system/StartMenu/Sidebar/SidebarButton";
@@ -12,11 +12,13 @@ import {
   Videos,
 } from "components/system/StartMenu/Sidebar/SidebarIcons";
 import StyledSidebar from "components/system/StartMenu/Sidebar/StyledSidebar";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
+import { useRootFs } from "contexts/fileSystem";
+import { resetStorageAndReload } from "contexts/fileSystem/useAsyncFs";
+import { useProcessesActions } from "contexts/process";
+import { useSessionActions } from "contexts/session";
 import { HOME, TASKBAR_HEIGHT } from "utils/constants";
 import { haltEvent, viewHeight } from "utils/functions";
+import { isKeyboardNavigating } from "utils/keyboard";
 
 type SidebarGroupProps = {
   sidebarButtons: SidebarButtons;
@@ -35,9 +37,9 @@ type SidebarProps = {
 };
 
 const Sidebar: FC<SidebarProps> = ({ height }) => {
-  const { rootFs } = useFileSystem();
-  const { open } = useProcesses();
-  const { setHaltSession } = useSession();
+  const rootFs = useRootFs();
+  const { open } = useProcessesActions();
+  const { setHaltSession } = useSessionActions();
   const [collapsed, setCollapsed] = useState(true);
   const expandTimer = useRef(0);
   const sidebarRef = useRef<HTMLElement>(null);
@@ -47,93 +49,94 @@ const Sidebar: FC<SidebarProps> = ({ height }) => {
       expandTimer.current = 0;
     }
   };
-  const topButtons: SidebarButtons = useMemo(
-    () => [
-      {
-        heading: true,
-        icon: <SideMenu />,
-        name: "START",
-        ...(collapsed && { tooltip: "Expand" }),
-      },
-      {
-        active: true,
-        icon: <AllApps />,
-        name: "All apps",
-        ...(collapsed && { tooltip: "All apps" }),
-      },
-    ],
-    [collapsed]
-  );
+  const topButtons: SidebarButtons = [
+    {
+      expanded: !collapsed,
+      heading: true,
+      icon: <SideMenu />,
+      name: "START",
+      ...(collapsed && { tooltip: "Expand" }),
+    },
+    {
+      active: true,
+      icon: <AllApps />,
+      name: "All apps",
+      ...(collapsed && { tooltip: "All apps" }),
+    },
+  ];
   const { sizes } = useTheme();
   const vh = viewHeight();
-  const buttonAreaCount = useMemo(
-    () => Math.floor((vh - TASKBAR_HEIGHT) / sizes.startMenu.sideBar.width),
-    [sizes.startMenu.sideBar.width, vh]
+  const buttonAreaCount = Math.floor(
+    (vh - TASKBAR_HEIGHT) / sizes.startMenu.sideBar.width
   );
-  const bottomButtons = useMemo(
-    () =>
-      [
-        buttonAreaCount > 3
-          ? {
-              action: () =>
-                open(
-                  "FileExplorer",
-                  { url: `${HOME}/Documents` },
-                  "/System/Icons/documents.webp"
-                ),
-              icon: <Documents />,
-              name: "Documents",
-              ...(collapsed && { tooltip: "Documents" }),
-            }
-          : undefined,
-        buttonAreaCount > 4
-          ? {
-              action: () =>
-                open(
-                  "FileExplorer",
-                  { url: `${HOME}/Pictures` },
-                  "/System/Icons/pictures.webp"
-                ),
-              icon: <Pictures />,
-              name: "Pictures",
-              ...(collapsed && { tooltip: "Pictures" }),
-            }
-          : undefined,
-        buttonAreaCount > 5
-          ? {
-              action: () =>
-                open(
-                  "FileExplorer",
-                  { url: `${HOME}/Videos` },
-                  "/System/Icons/videos.webp"
-                ),
-              icon: <Videos />,
-              name: "Videos",
-              ...(collapsed && { tooltip: "Videos" }),
-            }
-          : undefined,
-        {
-          action: () => {
-            setHaltSession(true);
+  const bottomButtons = [
+    buttonAreaCount > 3
+      ? {
+          action: () =>
+            open(
+              "FileExplorer",
+              { url: `${HOME}/Documents` },
+              "/System/Icons/documents.webp"
+            ),
+          icon: <Documents />,
+          name: "Documents",
+          ...(collapsed && { tooltip: "Documents" }),
+        }
+      : undefined,
+    buttonAreaCount > 4
+      ? {
+          action: () =>
+            open(
+              "FileExplorer",
+              { url: `${HOME}/Pictures` },
+              "/System/Icons/pictures.webp"
+            ),
+          icon: <Pictures />,
+          name: "Pictures",
+          ...(collapsed && { tooltip: "Pictures" }),
+        }
+      : undefined,
+    buttonAreaCount > 5
+      ? {
+          action: () =>
+            open(
+              "FileExplorer",
+              { url: `${HOME}/Videos` },
+              "/System/Icons/videos.webp"
+            ),
+          icon: <Videos />,
+          name: "Videos",
+          ...(collapsed && { tooltip: "Videos" }),
+        }
+      : undefined,
+    {
+      action: () => {
+        setHaltSession(true);
 
-            import("contexts/fileSystem/functions").then(({ resetStorage }) =>
-              resetStorage(rootFs).finally(() => window.location.reload())
-            );
-          },
-          icon: <Power />,
-          name: "Shut Down",
-          tooltip: "Clear session data and restart Olamov OS.",
-        },
-      ].filter(Boolean) as SidebarButtons,
-    [buttonAreaCount, collapsed, open, rootFs, setHaltSession]
-  );
+        resetStorageAndReload(rootFs);
+      },
+      icon: <Power />,
+      name: "Power",
+      tooltip: "Clears session data and reloads the page.",
+    },
+  ].filter(Boolean) as SidebarButtons;
 
-  useEffect(() => clearTimer, []);
+  useEffect(() => clearTimer, [clearTimer]);
 
   return (
     <StyledSidebar
       ref={sidebarRef}
+      aria-label="Start"
       className={collapsed ? "collapsed" : undefined}
+      onBlur={({ relatedTarget }) => {
+        // Like moving the pointer away, though clicks in it keep it open
+        if (
+          isKeyboardNavigating() &&
+          !sidebarRef.current?.contains(relatedTarget)
+        ) {
+          setCollapsed(true);
+        }
+      }}
       onClick={({ target }) => {
         clearTimer();
 
@@ -162,4 +165,4 @@ const Sidebar: FC<SidebarProps> = ({ height }) => {
   );
 };
 
-export default memo(Sidebar);
+export default Sidebar;

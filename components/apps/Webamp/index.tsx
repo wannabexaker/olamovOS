@@ -1,7 +1,6 @@
 import { basename, extname } from "path";
+import { useEffect, useRef, useState } from "react";
 import { type Options } from "webamp";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import StyledWebamp from "components/apps/Webamp/StyledWebamp";
 import {
   cleanBufferOnSkinLoad,
   focusWindow,
@@ -9,34 +8,30 @@ import {
   tracksFromPlaylist,
   unFocus,
 } from "components/apps/Webamp/functions";
+import StyledWebamp from "components/apps/Webamp/StyledWebamp";
 import useWebamp from "components/apps/Webamp/useWebamp";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import useFocusable from "components/system/Window/useFocusable";
 import useWindowTransitions from "components/system/Window/useWindowTransitions";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
+import { useFileSystemActions } from "contexts/fileSystem";
+import { useProcess, useProcessesActions } from "contexts/process";
 import { AUDIO_PLAYLIST_EXTENSIONS } from "utils/constants";
 import { bufferToUrl, getExtension, loadFiles } from "utils/functions";
 
 const Webamp: FC<ComponentProcessProps> = ({ id }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { readFile } = useFileSystem();
-  const {
-    processes: { [id]: { libs = [], minimized = false, url = "" } = {} } = {},
-    url: setUrl,
-  } = useProcesses();
+  const { readFile } = useFileSystemActions();
+  const { url: setUrl } = useProcessesActions();
+  const { libs = [], minimized = false, url = "" } = useProcess(id);
   const [loadedUrl, setLoadedUrl] = useState(url);
   const { initWebamp, webampCI } = useWebamp(id);
-  const windowTransitions = useWindowTransitions(id, true);
-  const focusEvents = useMemo(
-    () => ({
-      onBlurCapture: () => webampCI && unFocus(webampCI),
-      onFocusCapture: () => webampCI && focusWindow(webampCI, "main"),
-    }),
-    [webampCI]
-  );
+  const windowTransitions = useWindowTransitions(id, undefined, true);
+  const focusEvents = {
+    onBlurCapture: () => webampCI && unFocus(webampCI),
+    onFocusCapture: () => webampCI && focusWindow(webampCI, "main"),
+  };
   const { zIndex, ...focusableProps } = useFocusable(id, focusEvents);
-  const getUrlOptions = useCallback(async (): Promise<Options> => {
+  const getUrlOptions = async (): Promise<Options> => {
     if (url) {
       const extension = getExtension(url);
 
@@ -62,10 +57,10 @@ const Webamp: FC<ComponentProcessProps> = ({ id }) => {
     }
 
     return {};
-  }, [readFile, url]);
-  const loadWebampUrl = useCallback(async () => {
+  };
+  const loadWebampUrl = async (): Promise<void> => {
     if (webampCI) {
-      const { initialTracks, initialSkin } = await getUrlOptions();
+      const { initialSkin, initialTracks } = await getUrlOptions();
 
       if (initialTracks) webampCI.setTracksToPlay(initialTracks);
       else if (initialSkin) {
@@ -73,13 +68,14 @@ const Webamp: FC<ComponentProcessProps> = ({ id }) => {
         webampCI.setSkinFromUrl(initialSkin.url);
       }
     }
-  }, [getUrlOptions, webampCI]);
+  };
   const loadingWebamp = useRef(false);
 
   useEffect(() => {
     if (containerRef.current && !webampCI) {
       loadFiles(libs).then(async () => {
-        if (window.Webamp && !loadingWebamp.current) {
+        // Without Web Audio (Playwright's Windows WebKit) its constructor throws
+        if (window.Webamp?.browserIsSupported() && !loadingWebamp.current) {
           loadingWebamp.current = true;
 
           initWebamp(
@@ -94,6 +90,7 @@ const Webamp: FC<ComponentProcessProps> = ({ id }) => {
   useEffect(() => {
     if (url !== loadedUrl) {
       loadWebampUrl();
+      // eslint-disable-next-line react/set-state-in-effect -- Consumes each new url once
       setLoadedUrl(url);
     } else if (url) {
       setUrl(id, "");
@@ -106,10 +103,12 @@ const Webamp: FC<ComponentProcessProps> = ({ id }) => {
       ref={containerRef}
       $minimized={minimized}
       $zIndex={zIndex}
+      aria-hidden={minimized || undefined}
+      inert={minimized || undefined}
       {...focusableProps}
       {...windowTransitions}
     />
   );
 };
 
-export default memo(Webamp);
+export default Webamp;

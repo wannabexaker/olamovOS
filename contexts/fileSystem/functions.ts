@@ -1,17 +1,18 @@
 import { join } from "path";
 import type HTTPRequest from "browserfs/dist/node/backend/HTTPRequest";
 import type IndexedDBFileSystem from "browserfs/dist/node/backend/IndexedDB";
-import type OverlayFS from "browserfs/dist/node/backend/OverlayFS";
 import type InMemoryFileSystem from "browserfs/dist/node/backend/InMemory";
-import { type FileSystemObserver } from "contexts/fileSystem/useFileSystemContextState";
-import { FS_HANDLES } from "utils/constants";
-import { type RootFileSystem } from "contexts/fileSystem/useAsyncFs";
+import type OverlayFS from "browserfs/dist/node/backend/OverlayFS";
 import {
-  KEYVAL_STORE_NAME,
+  BROWSER_FS_DB,
   getFileSystemHandles,
   getKeyValStore,
+  KEYVAL_STORE_NAME,
   supportsIndexedDB,
 } from "contexts/fileSystem/core";
+import { type RootFileSystem } from "contexts/fileSystem/useAsyncFs";
+import { type FileSystemObserver } from "contexts/fileSystem/useFileSystemContextState";
+import { FS_HANDLES } from "utils/constants";
 
 const KNOWN_IDB_DBS = [
   "/classicube",
@@ -29,7 +30,7 @@ const observers = new Map<string, FileSystemObserver>();
 
 export const addFileSystemHandle = async (
   directory: string,
-  handle: FileSystemDirectoryHandle,
+  handle: FileSystemDirectoryHandle | undefined,
   mappedName: string,
   observer?: FileSystemObserver
 ): Promise<void> => {
@@ -76,7 +77,7 @@ export const removeFileSystemHandle = async (
 
 export const requestPermission = async (
   url: string
-): Promise<PermissionState | false> => {
+): Promise<false | PermissionState> => {
   const fsHandles = await getFileSystemHandles();
   const handle = fsHandles[url];
 
@@ -107,8 +108,7 @@ export const resetStorage = (rootFs?: RootFileSystem): Promise<void> =>
       const overlayedFileSystems = overlayFs?.getOverlayedFileSystems();
       const readable = overlayedFileSystems?.readable as HTTPRequest;
       const writable = overlayedFileSystems?.writable as
-        | IndexedDBFileSystem
-        | InMemoryFileSystem;
+        IndexedDBFileSystem | InMemoryFileSystem;
 
       readable?.empty();
 
@@ -125,12 +125,15 @@ export const resetStorage = (rootFs?: RootFileSystem): Promise<void> =>
           const dbs = window.indexedDB.databases
             ? (await window.indexedDB.databases())
                 .filter(
-                  ({ name }) => typeof name === "string" && name !== "browserfs"
+                  ({ name }) =>
+                    typeof name === "string" && name !== BROWSER_FS_DB
                 )
                 .map(({ name }) => name as string)
             : KNOWN_IDB_DBS;
 
-          await Promise.all(dbs.map((name) => deleteDB(name)));
+          await Promise.all(
+            dbs.map((name) => deleteDB(name, { blocked: clearFs }))
+          );
         } catch {
           // Ignore errors deleting databases
         } finally {

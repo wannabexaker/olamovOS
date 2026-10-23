@@ -1,178 +1,168 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type Event, nip19 } from "nostr-tools";
 import { AnimatePresence } from "motion/react";
+import { useEffect, useRef, useState } from "react";
 import ChatLog from "components/apps/Messenger/ChatLog";
+import {
+  inLeftOutRight,
+  inRightOutLeft,
+  UNKNOWN_PUBLIC_KEY,
+} from "components/apps/Messenger/constants";
 import Contact from "components/apps/Messenger/Contact";
+import ContactsToolbar from "components/apps/Messenger/ContactsToolbar";
+import {
+  decodePublicKey,
+  getSigner,
+  getUnixTime,
+} from "components/apps/Messenger/functions";
 import GetMoreMessages from "components/apps/Messenger/GetMoreMessages";
 import {
   HistoryProvider,
   useHistoryContext,
 } from "components/apps/Messenger/HistoryContext";
-import { MessageProvider } from "components/apps/Messenger/MessageContext";
+import {
+  useNostrContacts,
+  useUnreadStatus,
+  useWellKnownNames,
+} from "components/apps/Messenger/hooks";
+import {
+  MessageProvider,
+  useMessageContext,
+} from "components/apps/Messenger/MessageContext";
 import { NostrProvider } from "components/apps/Messenger/NostrContext";
 import ProfileBanner from "components/apps/Messenger/ProfileBanner";
 import SendMessage from "components/apps/Messenger/SendMessage";
 import StyledChatContainer from "components/apps/Messenger/StyledChatContainer";
 import StyledContacts from "components/apps/Messenger/StyledContacts";
+import StyledListButton from "components/apps/Messenger/StyledListButton";
 import StyledMessenger from "components/apps/Messenger/StyledMessenger";
 import To from "components/apps/Messenger/To";
-import {
-  OLAMOV_OWNER_NPUB,
-  UNKNOWN_PUBLIC_KEY,
-  inLeftOutRight,
-  inRightOutLeft,
-} from "components/apps/Messenger/constants";
-import {
-  getPublicHexFromNostrAddress,
-  getRelayUrls,
-  toHexKey,
-} from "components/apps/Messenger/functions";
-import {
-  useAllowlist,
-  useBlocklist,
-  useNip05,
-  useNostrContacts,
-  usePublicKey,
-  useUnreadStatus,
-} from "components/apps/Messenger/hooks";
+import { type Signer } from "components/apps/Messenger/types";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
-import { useProcesses } from "contexts/process";
-import { MILLISECONDS_IN_DAY, MILLISECONDS_IN_SECOND } from "utils/constants";
+import { useProcess, useProcessesActions } from "contexts/process";
+import Button from "styles/common/Button";
 import { haltEvent } from "utils/functions";
+
+type View = "chats" | "requests" | "spam";
+
+const VIEW_TITLES: Record<View, string> = {
+  chats: "Chats",
+  requests: "Message requests",
+  spam: "Spam",
+};
 
 type NostrChatProps = {
   processId: string;
-  publicKey: string;
-  relayUrls: string[];
-  setSince: React.Dispatch<React.SetStateAction<number>>;
+  setSigner: (signer: Signer) => void;
   wellKnownNames: Record<string, string>;
 };
 
 const NostrChat: FC<NostrChatProps> = ({
   processId,
-  publicKey,
-  relayUrls,
-  setSince,
+  setSigner,
   wellKnownNames,
 }) => {
-  const { setSeenEventIds } = useHistoryContext();
-  const [selectedRecipientKey, setSelectedRecipientKey] = useState<string>("");
-  const [hideReadMessages, setHideReadMessages] = useState<boolean>(false);
-  const { allow, isAllowed } = useAllowlist();
-  const { block, isBlocked } = useBlocklist();
-  const ownerHex = useMemo(() => {
-    let hex;
+  const { publicKey } = useMessageContext();
+  const { setBlockedKeys, setDeletedChats, setSeenEventIds } =
+    useHistoryContext();
+  const [selectedRecipientKey, setSelectedRecipientKey] = useState("");
+  const [hideReadMessages, setHideReadMessages] = useState(false);
+  const [view, setView] = useState<View>("chats");
+  const [selectedKeys, setSelectedKeys] = useState<string[]>();
+  const { chatKeys, lastMessages, requestKeys, spamKeys, unreadMessages } =
+    useNostrContacts(publicKey, wellKnownNames);
+  const unreadIds = new Set(unreadMessages.map(({ id }) => id));
+  const unreadKeys = new Set(
+    [...chatKeys, ...requestKeys, ...spamKeys].filter((key) =>
+      unreadIds.has(lastMessages[key]?.id)
+    )
+  );
+  const listKeys = { chats: chatKeys, requests: requestKeys, spam: spamKeys }[
+    view
+  ].filter((key) => !hideReadMessages || unreadKeys.has(key));
+  const { url: setUrl } = useProcessesActions();
+  const { url } = useProcess(processId);
+  const markRead = (keys: string[]): void => {
+    const ids = unreadMessages
+      .filter(({ pubkey }) => keys.includes(pubkey))
+      .map(({ id }) => id);
 
-    if (OLAMOV_OWNER_NPUB) {
-      try {
-        const decoded = nip19.decode(OLAMOV_OWNER_NPUB);
-
-        if (decoded.type === "npub") {
-          hex = decoded.data;
-        }
-      } catch {
-        // noop
-      }
+    if (ids.length > 0) {
+      setSeenEventIds((currentSeenEventIds) => [
+        ...new Set([...ids, ...currentSeenEventIds]),
+      ]);
     }
+  };
+  const deleteChats = (keys: string[]): void => {
+    setDeletedChats((currentDeletedChats) => ({
+      ...currentDeletedChats,
+      ...Object.fromEntries(
+        keys.map((key) => [
+          key,
+          Math.max(getUnixTime(), lastMessages[key]?.created_at ?? 0),
+        ])
+      ),
+    }));
+    setSelectedRecipientKey("");
+  };
+  const blockKeys = (keys: string[]): void => {
+    setBlockedKeys((currentBlockedKeys) => [
+      ...new Set([...currentBlockedKeys, ...keys]),
+    ]);
+    setSelectedRecipientKey("");
+  };
+  const changeView = (newView: View): void => {
+    setView(newView);
+    setSelectedKeys(undefined);
+  };
 
-    return hex;
-  }, []);
-  const changeRecipient = useCallback(
-    (recipientKey: string, currentEvents?: Event[]) =>
-      setSelectedRecipientKey((currenRecipientKey: string) => {
-        if ((currenRecipientKey || recipientKey) && currentEvents) {
-          setSeenEventIds((currentSeenEventIds) => [
-            ...new Set([
-              ...currentEvents
-                .filter(({ pubkey }) =>
-                  [recipientKey, currenRecipientKey].includes(pubkey)
-                )
-                .map(({ id }) => id),
-              ...currentSeenEventIds,
-            ]),
-          ]);
-        }
-
-        return recipientKey;
-      }),
-    [setSeenEventIds]
-  );
-  const { contactKeys, events, lastEvents, unreadEvents } = useNostrContacts(
-    publicKey,
-    wellKnownNames
-  );
-  const setRecipientKey = useCallback(
-    (recipientKey: string): boolean => {
-      const hexKey = getPublicHexFromNostrAddress(recipientKey);
-
-      if (hexKey) changeRecipient(hexKey);
-
-      return Boolean(hexKey);
-    },
-    [changeRecipient]
-  );
-  const {
-    processes: { [processId]: process },
-    url: setUrl,
-  } = useProcesses();
-  const { url } = process || {};
-
+  // Requests don't ring or count as unread until they are replied to
   useUnreadStatus(
     processId,
-    contactKeys.filter((contactKey) =>
-      unreadEvents.includes(lastEvents[contactKey])
-    ).length
+    chatKeys.filter((key) => unreadKeys.has(key)).length
   );
 
   useEffect(() => {
-    if (
-      !url ||
-      (!url.startsWith("nostr:npub") && !url.startsWith("nostr:nprofile"))
-    ) {
-      return;
-    }
+    if (!url?.startsWith("nostr:")) return;
 
-    const [, key] = url.split("nostr:");
+    const key = decodePublicKey(url);
 
-    if (key) {
-      const hexKey = toHexKey(key);
+    // eslint-disable-next-line react/set-state-in-effect -- Opens the chat a nostr: url points to
+    if (key) setSelectedRecipientKey(key);
 
-      if (key !== hexKey) {
-        setSelectedRecipientKey(hexKey);
-        setUrl(processId, "");
-      }
-    }
+    setUrl(processId, "");
   }, [processId, setUrl, url]);
 
   useEffect(() => {
-    if (unreadEvents && selectedRecipientKey) {
-      unreadEvents
-        .filter(({ pubkey }) => pubkey === selectedRecipientKey)
-        .forEach(({ id }) =>
-          setSeenEventIds((currentSeenEventIds) => [
-            ...new Set([id, ...currentSeenEventIds]),
-          ])
-        );
-    }
-  }, [selectedRecipientKey, setSeenEventIds, unreadEvents]);
+    if (selectedRecipientKey) markRead([selectedRecipientKey]);
+  }, [markRead, selectedRecipientKey]);
 
   return (
     <StyledMessenger>
       <ProfileBanner
-        goHome={() => changeRecipient("", events)}
+        block={(key) => blockKeys([key])}
+        deleteChat={(key) => deleteChats([key])}
+        goBack={
+          selectedRecipientKey || view !== "chats"
+            ? () =>
+                selectedRecipientKey
+                  ? setSelectedRecipientKey("")
+                  : changeView("chats")
+            : undefined
+        }
         hideReadMessages={hideReadMessages}
-        newChat={() => changeRecipient(UNKNOWN_PUBLIC_KEY)}
-        publicKey={publicKey}
-        relayUrls={relayUrls}
+        newChat={() => setSelectedRecipientKey(UNKNOWN_PUBLIC_KEY)}
         selectedRecipientKey={selectedRecipientKey}
         setHideReadMessages={setHideReadMessages}
+        setSigner={setSigner}
       />
       <div>
         <AnimatePresence initial={false} presenceAffectsLayout={false}>
           {selectedRecipientKey ? (
             <StyledChatContainer key="chat" {...inRightOutLeft}>
               {selectedRecipientKey === UNKNOWN_PUBLIC_KEY && (
-                <To setRecipientKey={setRecipientKey} />
+                <To
+                  knownKeys={[...chatKeys, ...requestKeys]}
+                  setRecipientKey={setSelectedRecipientKey}
+                />
               )}
               <ChatLog recipientPublicKey={selectedRecipientKey} />
               <SendMessage recipientPublicKey={selectedRecipientKey} />
@@ -180,84 +170,63 @@ const NostrChat: FC<NostrChatProps> = ({
           ) : (
             <StyledContacts
               key="contacts"
+              aria-label={VIEW_TITLES[view]}
               onContextMenu={haltEvent}
               {...inLeftOutRight}
             >
-              {ownerHex && !contactKeys.includes(ownerHex) && (
+              <ContactsToolbar
+                actions={[
+                  ["Mark read", markRead],
+                  ["Delete", deleteChats],
+                  ["Block", blockKeys],
+                ]}
+                keys={listKeys}
+                selectedKeys={selectedKeys}
+                setSelectedKeys={setSelectedKeys}
+                title={VIEW_TITLES[view]}
+              />
+              {listKeys.map((key) => (
                 <Contact
-                  key={ownerHex}
-                  lastEvent={lastEvents[ownerHex]}
-                  onClick={() => changeRecipient(ownerHex, events)}
-                  pubkey={ownerHex}
-                  publicKey={publicKey}
-                  unreadEvent={
-                    hideReadMessages ||
-                    unreadEvents.includes(lastEvents[ownerHex])
+                  key={key}
+                  block={() => blockKeys([key])}
+                  deleteChat={() => deleteChats([key])}
+                  lastMessage={lastMessages[key]}
+                  onClick={() => setSelectedRecipientKey(key)}
+                  onSelect={
+                    selectedKeys
+                      ? () =>
+                          setSelectedKeys((currentKeys = []) =>
+                            currentKeys.includes(key)
+                              ? currentKeys.filter(
+                                  (currentKey) => currentKey !== key
+                                )
+                              : [...currentKeys, key]
+                          )
+                      : undefined
                   }
-                  pinned
+                  pubkey={key}
+                  publicKey={publicKey}
+                  selected={selectedKeys?.includes(key)}
+                  unread={unreadKeys.has(key)}
                 />
-              )}
-              {contactKeys
-                .filter(
-                  (contactKey) =>
-                    !isBlocked(contactKey) &&
-                    (isAllowed(contactKey) || contactKey === ownerHex) &&
-                    (!hideReadMessages ||
-                      unreadEvents.includes(lastEvents[contactKey]))
-                )
-                .map((contactKey) => (
-                  <Contact
-                    key={contactKey}
-                    lastEvent={lastEvents[contactKey]}
-                    onClick={() => {
-                      changeRecipient(contactKey, events);
-                      allow(contactKey);
-                    }}
-                    pinned={contactKey === ownerHex}
-                    pubkey={contactKey}
-                    publicKey={publicKey}
-                    unreadEvent={
-                      hideReadMessages ||
-                      unreadEvents.includes(lastEvents[contactKey])
-                    }
-                  />
-                ))}
-              {(() => {
-                const requestList = contactKeys.filter(
-                  (contactKey) =>
-                    !isBlocked(contactKey) &&
-                    !isAllowed(contactKey) &&
-                    contactKey !== ownerHex &&
-                    (!hideReadMessages ||
-                      unreadEvents.includes(lastEvents[contactKey]))
-                );
-
-                return requestList.length > 0 ? (
-                  <section className="requests">
-                    <h3>Message Requests ({requestList.length})</h3>
-                    {requestList.map((contactKey) => (
-                      <Contact
-                        key={contactKey}
-                        lastEvent={lastEvents[contactKey]}
-                        onAccept={() => allow(contactKey)}
-                        onBlock={() => block(contactKey)}
-                        onClick={() => {
-                          changeRecipient(contactKey, events);
-                          allow(contactKey);
-                        }}
-                        pubkey={contactKey}
-                        publicKey={publicKey}
-                        unreadEvent={
-                          hideReadMessages ||
-                          unreadEvents.includes(lastEvents[contactKey])
-                        }
-                        isRequest
-                      />
-                    ))}
-                  </section>
-                ) : undefined;
-              })()}
-              <GetMoreMessages setSince={setSince} />
+              ))}
+              {view === "chats" &&
+                (
+                  [
+                    ["requests", requestKeys],
+                    ["spam", spamKeys],
+                  ] as const
+                ).map(
+                  ([otherView, keys]) =>
+                    keys.length > 0 && (
+                      <StyledListButton key={otherView}>
+                        <Button onClick={() => changeView(otherView)}>
+                          {`${VIEW_TITLES[otherView]} (${keys.length})`}
+                        </Button>
+                      </StyledListButton>
+                    )
+                )}
+              <GetMoreMessages />
             </StyledContacts>
           )}
         </AnimatePresence>
@@ -267,34 +236,26 @@ const NostrChat: FC<NostrChatProps> = ({
 };
 
 const Messenger: FC<ComponentProcessProps> = ({ id }) => {
-  const [since, setSince] = useState(() => MILLISECONDS_IN_DAY);
-  const timeSince = useMemo(
-    () => Math.floor((Date.now() - since) / MILLISECONDS_IN_SECOND),
-    [since]
-  );
-  const [relayUrls, setRelayUrls] = useState<string[] | undefined>();
+  const [signer, setSigner] = useState<Signer>();
   const initStarted = useRef(false);
-  const { names } = useNip05();
-  const publicKey = usePublicKey();
+  const wellKnownNames = useWellKnownNames();
 
   useEffect(() => {
-    if (initStarted.current || !publicKey) return;
+    if (initStarted.current) return;
 
     initStarted.current = true;
 
-    getRelayUrls().then(setRelayUrls);
-  }, [publicKey]);
+    getSigner().then(setSigner);
+  }, []);
 
-  return publicKey && relayUrls ? (
-    <NostrProvider relayUrls={relayUrls}>
+  return signer ? (
+    <NostrProvider key={signer.publicKey} signer={signer}>
       <HistoryProvider>
-        <MessageProvider publicKey={publicKey} since={timeSince}>
+        <MessageProvider>
           <NostrChat
             processId={id}
-            publicKey={publicKey}
-            relayUrls={relayUrls}
-            setSince={setSince}
-            wellKnownNames={names}
+            setSigner={setSigner}
+            wellKnownNames={wellKnownNames}
           />
         </MessageProvider>
       </HistoryProvider>
@@ -304,4 +265,4 @@ const Messenger: FC<ComponentProcessProps> = ({ id }) => {
   );
 };
 
-export default memo(Messenger);
+export default Messenger;

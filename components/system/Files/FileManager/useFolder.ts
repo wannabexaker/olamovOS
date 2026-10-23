@@ -1,8 +1,9 @@
 import { basename, dirname, extname, join, relative } from "path";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type AsyncZipOptions, type AsyncZippable } from "fflate";
 import { type ApiError } from "browserfs/dist/node/core/api_error";
 import type Stats from "browserfs/dist/node/core/node_fs_stats";
+import type * as Fflate from "fflate";
+import { type AsyncZipOptions, type AsyncZippable } from "fflate";
+import { useEffect, useRef, useState } from "react";
 import useTransferDialog, {
   type ObjectReader,
 } from "components/system/Dialogs/Transfer/useTransferDialog";
@@ -17,20 +18,26 @@ import {
 import {
   type FileStat,
   findPathsRecursive,
+  getParentDirectories,
   removeInvalidFilenameCharacters,
   sortByDate,
   sortBySize,
   sortContents,
-  getParentDirectories,
 } from "components/system/Files/FileManager/functions";
 import { type FocusEntryFunctions } from "components/system/Files/FileManager/useFocusableEntries";
 import useSortBy, {
   type SetSortBy,
   type SortByOrder,
 } from "components/system/Files/FileManager/useSortBy";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
-import { useSession } from "contexts/session";
+import { useFileSystemActions, useFs, usePasteList } from "contexts/fileSystem";
+import { type CaptureTriggerEvent } from "contexts/menu/useMenuContextState";
+import { getProcesses, useProcessesActions } from "contexts/process";
+import {
+  useIconPositions,
+  useSessionActions,
+  useSessionLoaded,
+  useSortOrder,
+} from "contexts/session";
 import {
   BASE_ZIP_CONFIG,
   DESKTOP_PATH,
@@ -46,10 +53,12 @@ import {
   cleanUpBufferUrl,
   getExtension,
   getIteratedNames,
+  omitEntry,
   saveUnpositionedDesktopIcons,
   updateIconPositions,
 } from "utils/functions";
-import { type CaptureTriggerEvent } from "contexts/menu/useMenuContextState";
+import { DESKTOP_SELECTOR } from "utils/keyboard";
+import { loadZipFunctions } from "utils/loaders";
 
 export type FileActions = {
   archiveFiles: (paths: string[]) => Promise<void>;
@@ -103,6 +112,62 @@ type FolderFlags = {
 };
 
 const NO_FILES = undefined;
+const EMPTY_FILES = Object.create(null) as Files;
+
+const loadFflate = (): Promise<typeof Fflate> => import("fflate");
+
+// Id of the window an element is in, "" for the desktop or nothing, undefined
+// for anywhere else
+const getWindowId = (element: unknown): string | undefined =>
+  !(element instanceof Element) ||
+  element === document.body ||
+  element.closest(DESKTOP_SELECTOR)
+    ? ""
+    : Object.entries(getProcesses()).find(([, { componentWindow }]) =>
+        componentWindow?.contains(element)
+      )?.[0];
+
+const triggerDownload = async (
+  contents: Buffer,
+  fileName?: string
+): Promise<void> => {
+  const extension = fileName ? getExtension(fileName) : undefined;
+  const name = fileName
+    ? extension
+      ? fileName
+      : `${fileName}.zip`
+    : "download.zip";
+
+  if (window.showSaveFilePicker && extension !== SHORTCUT_EXTENSION) {
+    try {
+      const filePickerHandle = await window.showSaveFilePicker({
+        id: "SaveFilePicker",
+        startIn: "desktop",
+        suggestedName: name,
+      });
+      const fileWriter = await filePickerHandle.createWritable();
+
+      await fileWriter.write(contents as BufferSource);
+      await fileWriter.close();
+    } catch {
+      // Ignore failure with file picker
+    }
+  } else {
+    const link = document.createElement("a");
+    const href = bufferToUrl(contents);
+
+    link.href = href;
+    link.download = name;
+
+    link.click();
+    link.remove();
+
+    setTimeout(() => {
+      cleanUpBufferUrl(href);
+      link.remove();
+    }, MILLISECONDS_IN_SECOND);
+  }
+};
 
 const useFolder = (
   directory: string,
@@ -125,11 +190,9 @@ const useFolder = (
     createPath,
     deletePath,
     exists,
-    fs,
     lstat,
     mkdir,
     mkdirRecursive,
-    pasteList,
     readdir,
     readFile,
     removeFsWatcher,
@@ -138,449 +201,372 @@ const useFolder = (
     stat,
     updateFolder,
     writeFile,
-  } = useFileSystem();
-  const {
-    iconPositions,
-    sessionLoaded,
-    setIconPositions,
-    setSortOrder,
-    sortOrders,
-  } = useSession();
-  const { [directory]: [sortOrder, sortBy, sortAscending] = [] } =
-    sortOrders || {};
+  } = useFileSystemActions();
+  const fs = useFs();
+  const pasteList = usePasteList();
+  const { setIconPositions, setSortOrder } = useSessionActions();
+  const iconPositions = useIconPositions();
+  const sessionLoaded = useSessionLoaded();
+  const [sortOrder, sortBy, sortAscending] = useSortOrder(directory);
   const [currentDirectory, setCurrentDirectory] = useState(directory);
-  const { close, closeProcessesByUrl } = useProcesses();
-  const statsWithShortcutInfo = useCallback(
-    async (fileName: string, stats: Stats): Promise<FileStat> => {
-      if (
-        SYSTEM_SHORTCUT_DIRECTORIES.has(directory) &&
-        getExtension(fileName) === SHORTCUT_EXTENSION
-      ) {
-        const shortcutPath = join(directory, fileName);
-        const { type } = isExistingFile(stats)
-          ? getCachedShortcut(shortcutPath)
-          : getShortcutInfo(await readFile(shortcutPath));
+  const { close, closeProcessesByUrl } = useProcessesActions();
+  const statsWithShortcutInfo = async (
+    fileName: string,
+    stats: Stats
+  ): Promise<FileStat> => {
+    if (
+      SYSTEM_SHORTCUT_DIRECTORIES.has(directory) &&
+      getExtension(fileName) === SHORTCUT_EXTENSION
+    ) {
+      const shortcutPath = join(directory, fileName);
+      const { type } = isExistingFile(stats)
+        ? getCachedShortcut(shortcutPath)
+        : getShortcutInfo(await readFile(shortcutPath));
 
-        return Object.assign(stats, { systemShortcut: type === "System" });
-      }
+      return Object.assign(stats, { systemShortcut: type === "System" });
+    }
 
-      return stats;
-    },
-    [directory, readFile]
-  );
-  const isSimpleSort = useMemo(
-    () => skipSorting || !sortBy || sortBy === "name" || sortBy === "type",
-    [skipSorting, sortBy]
-  );
-  const updateFiles = useCallback(
-    async (newFile?: string, oldFile?: string) => {
-      if (oldFile) {
-        if (!(await exists(join(directory, oldFile)))) {
-          const oldName = basename(oldFile);
+    return stats;
+  };
+  const isSimpleSort =
+    skipSorting || !sortBy || sortBy === "name" || sortBy === "type";
+  const updateFiles = async (
+    newFile?: string,
+    oldFile?: string
+  ): Promise<void> => {
+    if (oldFile) {
+      if (!(await exists(join(directory, oldFile)))) {
+        const oldName = basename(oldFile);
 
-          if (newFile) {
-            setFiles((currentFiles = {}) =>
-              Object.entries(currentFiles).reduce<Files>(
-                (newFiles, [fileName, fileStats]) => {
-                  // eslint-disable-next-line no-param-reassign
-                  newFiles[
-                    fileName === oldName ? basename(newFile) : fileName
-                  ] = fileStats;
+        if (newFile) {
+          setFiles((currentFiles = {}) =>
+            Object.entries(currentFiles).reduce<Files>(
+              (newFiles, [fileName, fileStats]) => {
+                // eslint-disable-next-line no-param-reassign
+                newFiles[fileName === oldName ? basename(newFile) : fileName] =
+                  fileStats;
 
-                  return newFiles;
-                },
-                {}
-              )
-            );
-          } else {
-            blurEntry(oldName);
-            setFiles(
-              ({ [oldName]: _fileStats, ...currentFiles } = {}) => currentFiles
-            );
-          }
-        }
-      } else if (newFile) {
-        const baseName = basename(newFile);
-        const filePath = join(directory, newFile);
-        const fileStats = await statsWithShortcutInfo(
-          baseName,
-          isSimpleSort ? await lstat(filePath) : await stat(filePath)
-        );
-
-        setFiles((currentFiles = {}) => ({
-          ...currentFiles,
-          [baseName]: fileStats,
-        }));
-      } else {
-        setIsLoading(true);
-
-        try {
-          const dirContents = (await readdir(directory)).filter(
-            filterSystemFiles(directory)
+                return newFiles;
+              },
+              {}
+            )
           );
-          const filesAccumulator: Files = Object.create(null) as Files;
-          const effectiveSortOrder = (!skipSorting && sortOrder) || [];
-          const sortFunction = isSimpleSort
-            ? undefined
-            : sortBy === "date"
-              ? sortByDate(directory)
-              : sortBySize;
-          const sortAccumulator = (): Files =>
-            sortContents(
-              filesAccumulator,
-              effectiveSortOrder,
-              sortFunction,
-              sortAscending
-            );
-          let pendingFrame = 0;
+        } else {
+          blurEntry(oldName);
+          setFiles((currentFiles = {}) => omitEntry(currentFiles, oldName));
+        }
+      }
+    } else if (newFile) {
+      const baseName = basename(newFile);
+      const filePath = join(directory, newFile);
+      const fileStats = await statsWithShortcutInfo(
+        baseName,
+        isSimpleSort ? await lstat(filePath) : await stat(filePath)
+      );
 
-          await Promise.all(
-            dirContents.map(async (file) => {
-              try {
-                const filePath = join(directory, file);
-                const fileStats = isSimpleSort
-                  ? await lstat(filePath)
-                  : await stat(filePath);
-                const hideEntry = hideFolders && fileStats.isDirectory();
+      setFiles((currentFiles = {}) => ({
+        ...currentFiles,
+        [baseName]: fileStats,
+      }));
+    } else {
+      setIsLoading(true);
 
-                if (!hideEntry) {
-                  filesAccumulator[file] = await statsWithShortcutInfo(
-                    file,
-                    fileStats
-                  );
+      const readFiles = async (): Promise<void> => {
+        const dirContents = (await readdir(directory)).filter(
+          filterSystemFiles(directory)
+        );
+        const filesAccumulator: Files = Object.create(null) as Files;
+        const effectiveSortOrder = (!skipSorting && sortOrder) || [];
+        const sortFunction = isSimpleSort
+          ? undefined
+          : sortBy === "date"
+            ? sortByDate(directory)
+            : sortBySize(directory);
+        const sortAccumulator = (): Files =>
+          sortContents(
+            filesAccumulator,
+            effectiveSortOrder,
+            sortFunction,
+            sortAscending
+          );
+        let pendingFrame = 0;
 
-                  if (hideLoading && pendingFrame === 0) {
-                    pendingFrame = window.requestAnimationFrame(() => {
-                      pendingFrame = 0;
-                      setFiles(sortAccumulator());
-                    });
-                  }
-                }
-              } catch {
-                // Ignore failure to process file
+        await Promise.allSettled(
+          dirContents.map(async (file) => {
+            const filePath = join(directory, file);
+            const fileStats = isSimpleSort
+              ? await lstat(filePath)
+              : await stat(filePath);
+            const hideEntry = hideFolders && fileStats.isDirectory();
+
+            if (!hideEntry) {
+              filesAccumulator[file] = await statsWithShortcutInfo(
+                file,
+                fileStats
+              );
+
+              if (hideLoading && pendingFrame === 0) {
+                pendingFrame = window.requestAnimationFrame(() => {
+                  pendingFrame = 0;
+                  setFiles(sortAccumulator());
+                });
               }
-            })
-          );
-
-          if (pendingFrame !== 0) {
-            window.cancelAnimationFrame(pendingFrame);
-          }
-
-          if (dirContents.length > 0) {
-            const sortedFiles = sortAccumulator();
-
-            setFiles(sortedFiles);
-
-            const newSortOrder = Object.keys(sortedFiles);
-
-            if (
-              !skipSorting &&
-              (!sortOrder ||
-                sortOrder?.some(
-                  (entry, index) => newSortOrder[index] !== entry
-                ))
-            ) {
-              window.requestAnimationFrame(() =>
-                setSortOrder(directory, newSortOrder)
-              );
             }
-          } else {
-            setFiles(Object.create(null) as Files);
-          }
-        } catch (error) {
-          if ((error as ApiError).code === "ENOENT") {
-            closeProcessesByUrl(directory);
-          }
-        }
-
-        setIsLoading(false);
-      }
-    },
-    [
-      blurEntry,
-      closeProcessesByUrl,
-      directory,
-      exists,
-      hideFolders,
-      hideLoading,
-      isSimpleSort,
-      lstat,
-      readdir,
-      setSortOrder,
-      skipSorting,
-      sortAscending,
-      sortBy,
-      sortOrder,
-      stat,
-      statsWithShortcutInfo,
-    ]
-  );
-  const deleteLocalPath = useCallback(
-    async (path: string): Promise<void> => {
-      if (await deletePath(path)) {
-        updateFolder(directory, undefined, basename(path));
-      }
-    },
-    [deletePath, directory, updateFolder]
-  );
-  const triggerDownload = useCallback(
-    async (contents: Buffer, fileName?: string): Promise<void> => {
-      const extension = fileName ? getExtension(fileName) : undefined;
-      const name = fileName
-        ? extension
-          ? fileName
-          : `${fileName}.zip`
-        : "download.zip";
-
-      if (window.showSaveFilePicker && extension !== SHORTCUT_EXTENSION) {
-        try {
-          const filePickerHandle = await window.showSaveFilePicker({
-            id: "SaveFilePicker",
-            startIn: "desktop",
-            suggestedName: name,
-          });
-          const fileWriter = await filePickerHandle.createWritable();
-
-          await fileWriter.write(contents as BufferSource);
-          await fileWriter.close();
-        } catch {
-          // Ignore failure with file picker
-        }
-      } else {
-        const link = document.createElement("a");
-        const href = bufferToUrl(contents);
-
-        link.href = href;
-        link.download = name;
-
-        link.click();
-        link.remove();
-
-        setTimeout(() => {
-          cleanUpBufferUrl(href);
-          link.remove();
-        }, MILLISECONDS_IN_SECOND);
-      }
-    },
-    []
-  );
-  const getFile = useCallback(
-    async (path: string): Promise<ZipFile> => [
-      relative(directory, path),
-      await readFile(path),
-    ],
-    [directory, readFile]
-  );
-  const renameFile = useCallback(
-    async (path: string, name?: string): Promise<void> => {
-      let newName = removeInvalidFilenameCharacters(name).trim();
-
-      if (newName?.endsWith(".")) {
-        newName = newName.slice(0, -1);
-      }
-
-      if (newName) {
-        const renamedPath = join(
-          directory,
-          `${newName}${
-            path.endsWith(SHORTCUT_EXTENSION) ? SHORTCUT_EXTENSION : ""
-          }`
+          })
         );
 
-        if (!(await exists(renamedPath)) && (await rename(path, renamedPath))) {
-          if (isDesktop) {
-            saveUnpositionedDesktopIcons(setIconPositions);
+        if (pendingFrame !== 0) {
+          window.cancelAnimationFrame(pendingFrame);
+        }
 
-            setIconPositions((currentPositions) => ({
-              ...currentPositions,
-              ...(currentPositions[path]
-                ? { [renamedPath]: currentPositions[path] }
-                : undefined),
-            }));
+        if (dirContents.length > 0) {
+          const sortedFiles = sortAccumulator();
 
-            await updateFolder(directory, renamedPath, path);
+          setFiles(sortedFiles);
 
-            requestAnimationFrame(() =>
-              setIconPositions((currentPositions) => {
-                const { [path]: iconPosition, ...newPositions } =
-                  currentPositions;
+          const newSortOrder = Object.keys(sortedFiles);
 
-                if (iconPosition) {
-                  newPositions[renamedPath] = iconPosition;
-                }
-
-                return newPositions;
-              })
+          if (
+            !skipSorting &&
+            (!sortOrder ||
+              sortOrder?.some((entry, index) => newSortOrder[index] !== entry))
+          ) {
+            window.requestAnimationFrame(() =>
+              setSortOrder(directory, newSortOrder)
             );
-          } else {
-            await updateFolder(directory, renamedPath, path);
           }
+        } else {
+          setFiles(Object.create(null) as Files);
         }
-      }
-    },
-    [directory, exists, isDesktop, rename, setIconPositions, updateFolder]
-  );
-  const newPath = useCallback(
-    async (
-      name: string,
-      buffer?: Buffer,
-      completeAction?: CompleteAction,
-      earlyNameCallback?: (newName: string) => void
-    ): Promise<string> => {
-      const uniqueName = await createPath(name, directory, buffer);
-
-      if (uniqueName && !uniqueName.includes("/")) {
-        earlyNameCallback?.(uniqueName);
-        await updateFolder(directory, uniqueName);
-
-        if (completeAction === "rename") setRenaming(uniqueName);
-        else {
-          blurEntry();
-          focusEntry(uniqueName);
-        }
-      }
-
-      return uniqueName;
-    },
-    [blurEntry, createPath, directory, focusEntry, setRenaming, updateFolder]
-  );
-  const newShortcut = useCallback(
-    (path: string, process: string): void => {
-      const pathExtension = getExtension(path);
-
-      if (pathExtension === SHORTCUT_EXTENSION) {
-        fs?.readFile(path, (_readError, contents = Buffer.from("")) =>
-          newPath(basename(path), contents)
-        );
-        return;
-      }
-
-      const baseName = basename(path);
-      const shortcutPath = `${baseName}${SHORTCUT_APPEND}${SHORTCUT_EXTENSION}`;
-      const shortcutData = createShortcut({ BaseURL: process, URL: path });
-
-      newPath(shortcutPath, Buffer.from(shortcutData));
-    },
-    [fs, newPath]
-  );
-  const createZipFile = useCallback(
-    async (paths: string[]): Promise<AsyncZippable> => {
-      const allPaths = await findPathsRecursive(paths, readdir, stat);
-      const [filePaths, { addEntryToZippable, createZippable }] =
-        await Promise.all([
-          Promise.all(allPaths.map((path) => getFile(path))),
-          import("utils/zipFunctions"),
-        ]);
-
-      return filePaths
-        .filter(Boolean)
-        .map(
-          ([path, file]) =>
-            [
-              path,
-              getExtension(path) === SHORTCUT_EXTENSION
-                ? makeExternalShortcut(file)
-                : file,
-            ] as [string, Buffer]
-        )
-        .reduce<AsyncZippable>(
-          (accFiles, [path, file]) =>
-            addEntryToZippable(accFiles, createZippable(path, file)),
-          {}
-        );
-    },
-    [getFile, readdir, stat]
-  );
-  const archiveFiles = useCallback(
-    async (paths: string[]): Promise<void> => {
-      const [{ zip }, zipFile] = await Promise.all([
-        import("fflate"),
-        createZipFile(paths),
-      ]);
-
-      zip(zipFile, BASE_ZIP_CONFIG, (_zipError, newZipFile) => {
-        if (newZipFile) {
-          newPath(
-            `${basename(directory) || "archive"}.zip`,
-            Buffer.from(newZipFile)
-          );
-        }
-      });
-    },
-    [createZipFile, directory, newPath]
-  );
-  const downloadFiles = useCallback(
-    async (paths: string[]): Promise<void> => {
-      const zipFiles = await createZipFile(paths);
-      const zipEntries = Object.entries(zipFiles);
-      const [[path, file]] = zipEntries.length === 0 ? [["", ""]] : zipEntries;
-      const singleParentEntry = zipEntries.length === 1;
-
-      if (singleParentEntry && extname(path)) {
-        const [contents] = file as [Uint8Array, AsyncZipOptions];
-
-        triggerDownload(contents as Buffer, basename(path));
-      } else {
-        const { zip } = await import("fflate");
-
-        zip(
-          singleParentEntry ? (file as AsyncZippable) : zipFiles,
-          BASE_ZIP_CONFIG,
-          (_zipError, newZipFile) => {
-            if (newZipFile) {
-              triggerDownload(
-                Buffer.from(newZipFile),
-                singleParentEntry ? path : undefined
-              );
-            }
-          }
-        );
-      }
-    },
-    [triggerDownload, createZipFile]
-  );
-  const { openTransferDialog } = useTransferDialog();
-  const extractFiles = useCallback(
-    async (path: string): Promise<void> => {
-      openTransferDialog(undefined, path, "Extracting");
-
-      const closeDialog = (): void =>
-        close(`Transfer${PROCESS_DELIMITER}${path}`);
+      };
 
       try {
-        const [{ unarchive, unzip }, data] = await Promise.all([
-          import("utils/zipFunctions"),
-          readFile(path),
-        ]);
-        const unzippedFiles = Object.entries(
-          ZIP_EXTENSIONS.has(getExtension(path))
-            ? await unzip(data)
-            : await unarchive(path, data)
-        );
+        await readFiles();
+      } catch (error) {
+        if ((error as ApiError).code === "ENOENT") {
+          closeProcessesByUrl(directory);
+        }
+      }
 
-        if (unzippedFiles.length === 0) closeDialog();
-        else {
-          const zipFolderName = basename(
-            path,
-            path.toLowerCase().endsWith(".tar.gz") ? ".tar.gz" : extname(path)
+      setIsLoading(false);
+    }
+  };
+  const deleteLocalPath = async (path: string): Promise<void> => {
+    if (await deletePath(path)) {
+      updateFolder(directory, undefined, basename(path));
+    }
+  };
+  const getFile = async (path: string): Promise<ZipFile> => [
+    relative(directory, path),
+    await readFile(path),
+  ];
+  const renameFile = async (path: string, name?: string): Promise<void> => {
+    // Enter leaves the rename box focused, unlike a click or Tab elsewhere
+    const byEnter = document.activeElement instanceof HTMLTextAreaElement;
+    let newName = removeInvalidFilenameCharacters(name).trim();
+
+    if (newName?.endsWith(".")) {
+      newName = newName.slice(0, -1);
+    }
+
+    if (newName) {
+      const renamedPath = join(
+        directory,
+        `${newName}${
+          path.endsWith(SHORTCUT_EXTENSION) ? SHORTCUT_EXTENSION : ""
+        }`
+      );
+
+      if (!(await exists(renamedPath)) && (await rename(path, renamedPath))) {
+        if (isDesktop) {
+          saveUnpositionedDesktopIcons(setIconPositions);
+
+          setIconPositions((currentPositions) => ({
+            ...currentPositions,
+            ...(currentPositions[path]
+              ? { [renamedPath]: currentPositions[path] }
+              : undefined),
+          }));
+
+          await updateFolder(directory, renamedPath, path);
+
+          requestAnimationFrame(() =>
+            setIconPositions((currentPositions) => {
+              const iconPosition = currentPositions[path];
+              const newPositions = omitEntry(currentPositions, path);
+
+              if (iconPosition) {
+                newPositions[renamedPath] = iconPosition;
+              }
+
+              return newPositions;
+            })
           );
-          const uniqueName = await createPath(zipFolderName, directory);
-          const objectReaders = unzippedFiles.map<ObjectReader>(
-            ([extractPath, fileContents]) => {
-              let aborted = false;
+        } else {
+          await updateFolder(directory, renamedPath, path);
+        }
 
-              return {
-                abort: () => {
-                  aborted = true;
-                },
-                directory: join(directory, uniqueName),
-                done: () => updateFolder(directory, uniqueName),
-                name: extractPath,
-                operation: "Extracting",
-                read: async () => {
-                  if (aborted) return;
+        blurEntry(basename(path));
+        // Like Explorer, a renamed entry stays selected after Enter
+        if (byEnter) focusEntry(basename(renamedPath));
+      }
+    }
+  };
+  const newPath = async (
+    name: string,
+    buffer?: Buffer,
+    completeAction?: CompleteAction,
+    earlyNameCallback?: (newName: string) => void
+  ): Promise<string> => {
+    const uniqueName = await createPath(name, directory, buffer);
 
-                  try {
+    if (uniqueName && !uniqueName.includes("/")) {
+      earlyNameCallback?.(uniqueName);
+      await updateFolder(directory, uniqueName);
+
+      if (completeAction === "rename") setRenaming(uniqueName);
+      else {
+        blurEntry();
+        focusEntry(uniqueName);
+      }
+    }
+
+    return uniqueName;
+  };
+  const newShortcut = (path: string, process: string): void => {
+    const pathExtension = getExtension(path);
+
+    if (pathExtension === SHORTCUT_EXTENSION) {
+      fs?.readFile(path, (_readError, contents = Buffer.from("")) =>
+        newPath(basename(path), contents)
+      );
+      return;
+    }
+
+    const baseName = basename(path);
+    const shortcutPath = `${baseName}${SHORTCUT_APPEND}${SHORTCUT_EXTENSION}`;
+    const shortcutData = createShortcut({ BaseURL: process, URL: path });
+
+    newPath(shortcutPath, Buffer.from(shortcutData));
+  };
+  const createZipFile = async (paths: string[]): Promise<AsyncZippable> => {
+    const allPaths = await findPathsRecursive(paths, readdir, stat);
+    const [filePaths, { addEntryToZippable, createZippable }] =
+      await Promise.all([
+        Promise.all(allPaths.map((path) => getFile(path))),
+        loadZipFunctions(),
+      ]);
+
+    return filePaths
+      .filter(Boolean)
+      .map(
+        ([path, file]) =>
+          [
+            path,
+            getExtension(path) === SHORTCUT_EXTENSION
+              ? makeExternalShortcut(file)
+              : file,
+          ] as [string, Buffer]
+      )
+      .reduce<AsyncZippable>(
+        (accFiles, [path, file]) =>
+          addEntryToZippable(accFiles, createZippable(path, file)),
+        {}
+      );
+  };
+  const archiveFiles = async (paths: string[]): Promise<void> => {
+    const [{ zip }, zipFile] = await Promise.all([
+      loadFflate(),
+      createZipFile(paths),
+    ]);
+
+    zip(zipFile, BASE_ZIP_CONFIG, (_zipError, newZipFile) => {
+      if (newZipFile) {
+        newPath(
+          `${basename(directory) || "archive"}.zip`,
+          Buffer.from(newZipFile)
+        );
+      }
+    });
+  };
+  const downloadFiles = async (paths: string[]): Promise<void> => {
+    const zipFiles = await createZipFile(paths);
+    const zipEntries = Object.entries(zipFiles);
+    const [[path, file]] = zipEntries.length === 0 ? [["", ""]] : zipEntries;
+    const singleParentEntry = zipEntries.length === 1;
+
+    if (singleParentEntry && extname(path)) {
+      const [contents] = file as [Uint8Array, AsyncZipOptions];
+
+      triggerDownload(contents as Buffer, basename(path));
+    } else {
+      const { zip } = await loadFflate();
+
+      zip(
+        singleParentEntry ? (file as AsyncZippable) : zipFiles,
+        BASE_ZIP_CONFIG,
+        (_zipError, newZipFile) => {
+          if (newZipFile) {
+            triggerDownload(
+              Buffer.from(newZipFile),
+              singleParentEntry ? path : undefined
+            );
+          }
+        }
+      );
+    }
+  };
+  const { openTransferDialog } = useTransferDialog();
+  const extractFiles = async (path: string): Promise<void> => {
+    openTransferDialog(undefined, path, "Extracting");
+
+    const closeDialog = (): void =>
+      close(`Transfer${PROCESS_DELIMITER}${path}`);
+
+    const extract = async (): Promise<void> => {
+      const [{ getZipBatches, unarchive, unzip }, data] = await Promise.all([
+        loadZipFunctions(),
+        readFile(path),
+      ]);
+      const isZip = ZIP_EXTENSIONS.has(getExtension(path));
+      let unzipped = isZip ? {} : await unarchive(path, data);
+      const batches = isZip
+        ? await getZipBatches(data)
+        : [Object.keys(unzipped)];
+
+      if (batches[0].length === 0) closeDialog();
+      else {
+        const zipFolderName = basename(
+          path,
+          path.toLowerCase().endsWith(".tar.gz") ? ".tar.gz" : extname(path)
+        );
+        const uniqueName = await createPath(zipFolderName, directory);
+        let currentBatch = isZip ? -1 : 0;
+        let extracting = Promise.resolve();
+        const objectReaders = batches.flatMap((names, batch) =>
+          names.map<ObjectReader>((extractPath) => {
+            let aborted = false;
+
+            return {
+              abort: () => {
+                aborted = true;
+              },
+              directory: join(directory, uniqueName),
+              done: () => updateFolder(directory, uniqueName),
+              name: extractPath,
+              operation: "Extracting",
+              // One at a time, so only the current batch is in memory
+              read: () => {
+                extracting = extracting
+                  .then(async () => {
+                    if (aborted) return;
+
+                    if (batch !== currentBatch) {
+                      currentBatch = batch;
+                      unzipped = await unzip(data, names);
+                    }
+
+                    const fileContents = unzipped[extractPath];
                     const localPath = join(directory, uniqueName, extractPath);
 
                     if (
@@ -595,173 +581,165 @@ const useFolder = (
 
                       await writeFile(localPath, Buffer.from(fileContents));
                     }
-                  } catch {
+                  })
+                  .catch(() => {
                     // Ignore failure to extract
-                  }
-                },
-              };
-            }
-          );
+                  });
 
-          openTransferDialog(objectReaders, path);
+                return extracting;
+              },
+            };
+          })
+        );
+
+        openTransferDialog(objectReaders, path);
+      }
+    };
+
+    try {
+      await extract();
+    } catch (error) {
+      closeDialog();
+
+      if ("message" in (error as Error)) {
+        console.error((error as Error).message);
+      }
+    }
+  };
+  const pasteToFolder = (event?: CaptureTriggerEvent): void => {
+    [directory, ...getParentDirectories(directory)].forEach(
+      (parentDirectory) =>
+        pasteList[parentDirectory] && delete pasteList[parentDirectory]
+    );
+
+    const pasteEntries = Object.entries(pasteList);
+    const moving = pasteEntries.some(([, operation]) => operation === "move");
+    const pastedEntries: string[] = [];
+    // Where it was pasted, which may not be where focus is
+    const pasteWindowId = getWindowId(event?.target || document.activeElement);
+    const copyFiles = async (entry: string, basePath = ""): Promise<void> => {
+      const newBasePath = join(basePath, basename(entry));
+      let uniquePath = "";
+
+      try {
+        if ((await lstat(entry)).isDirectory()) {
+          uniquePath = await createPath(newBasePath, directory);
+
+          await Promise.all(
+            (await readdir(entry)).map((dirEntry) =>
+              copyFiles(join(entry, dirEntry), uniquePath)
+            )
+          );
+        } else {
+          uniquePath = await createPath(
+            newBasePath,
+            directory,
+            await readFile(entry)
+          );
         }
       } catch (error) {
-        closeDialog();
+        const { code, path } = error as ApiError;
 
-        if ("message" in (error as Error)) {
-          console.error((error as Error).message);
+        if (path && code === "ENOENT") {
+          setPasteList((currentPasteList) => omitEntry(currentPasteList, path));
         }
       }
-    },
-    [
-      close,
-      createPath,
-      directory,
-      exists,
-      mkdir,
-      mkdirRecursive,
-      openTransferDialog,
-      readFile,
-      updateFolder,
-      writeFile,
-    ]
-  );
-  const pasteToFolder = useCallback(
-    (event?: CaptureTriggerEvent): void => {
-      [directory, ...getParentDirectories(directory)].forEach(
-        (parentDirectory) =>
-          pasteList[parentDirectory] && delete pasteList[parentDirectory]
-      );
 
-      const pasteEntries = Object.entries(pasteList);
-      const moving = pasteEntries.some(([, operation]) => operation === "move");
-      const copyFiles = async (entry: string, basePath = ""): Promise<void> => {
-        const newBasePath = join(basePath, basename(entry));
-        let uniquePath = "";
+      if (uniquePath && !basePath) {
+        pastedEntries.push(uniquePath);
+        updateFolder(directory, uniquePath);
+      }
+    };
+    const objectReaders = pasteEntries.map<ObjectReader>(([pasteEntry]) => {
+      let aborted = false;
 
-        try {
-          if ((await lstat(entry)).isDirectory()) {
-            uniquePath = await createPath(newBasePath, directory);
+      return {
+        abort: () => {
+          aborted = true;
+        },
+        directory,
+        done: () => {
+          if (moving) copyEntries([]);
 
-            await Promise.all(
-              (await readdir(entry)).map((dirEntry) =>
-                copyFiles(join(entry, dirEntry), uniquePath)
-              )
-            );
-          } else {
-            uniquePath = await createPath(
-              newBasePath,
-              directory,
-              await readFile(entry)
-            );
+          const focusedWindowId = getWindowId(document.activeElement);
+
+          // Like Explorer, what was pasted is selected, unless focus or the
+          // window has since gone elsewhere
+          if (
+            pastedEntries.length > 0 &&
+            (focusedWindowId === pasteWindowId ||
+              Boolean(focusedWindowId?.startsWith("Transfer"))) &&
+            (!pasteWindowId || getProcesses()[pasteWindowId]?.url === directory)
+          ) {
+            blurEntry();
+            pastedEntries.forEach(focusEntry);
           }
-        } catch (error) {
-          const { code, path } = error as ApiError;
+        },
+        name: pasteEntry,
+        operation: moving ? "Moving" : "Copying",
+        read: async () => {
+          if (aborted) return;
 
-          if (path && code === "ENOENT") {
-            setPasteList(
-              ({ [path]: _missingFile, ...currentPasteList }) =>
-                currentPasteList
-            );
-          }
-        }
+          if (moving) {
+            const movedEntry = await createPath(pasteEntry, directory);
 
-        if (uniquePath && !basePath) updateFolder(directory, uniquePath);
+            // Moving into where it already is, or into itself, pastes nothing
+            if (movedEntry) pastedEntries.push(movedEntry);
+            updateFolder(directory, movedEntry);
+          } else await copyFiles(pasteEntry);
+        },
       };
-      const objectReaders = pasteEntries.map<ObjectReader>(([pasteEntry]) => {
-        let aborted = false;
+    });
 
-        return {
-          abort: () => {
-            aborted = true;
-          },
+    if (event) {
+      const { clientX: x, clientY: y } =
+        "TouchEvent" in window && event.nativeEvent instanceof TouchEvent
+          ? event.nativeEvent.touches[0]
+          : (event.nativeEvent as MouseEvent);
+
+      getIteratedNames(
+        pasteEntries.map(([entry]) => basename(entry)),
+        directory,
+        iconPositions,
+        exists
+      ).then((entries) =>
+        updateIconPositions(
           directory,
-          done: () => {
-            if (moving) copyEntries([]);
-          },
-          name: pasteEntry,
-          operation: moving ? "Moving" : "Copying",
-          read: async () => {
-            if (aborted) return;
-
-            if (moving) {
-              updateFolder(directory, await createPath(pasteEntry, directory));
-            } else await copyFiles(pasteEntry);
-          },
-        };
-      });
-
-      if (event) {
-        const { clientX: x, clientY: y } =
-          "TouchEvent" in window && event.nativeEvent instanceof TouchEvent
-            ? event.nativeEvent.touches[0]
-            : (event.nativeEvent as MouseEvent);
-
-        getIteratedNames(
-          pasteEntries.map(([entry]) => basename(entry)),
-          directory,
+          event.target as HTMLElement,
           iconPositions,
+          sortOrder,
+          { x, y },
+          entries,
+          setIconPositions,
           exists
-        ).then((entries) =>
-          updateIconPositions(
-            directory,
-            event.target as HTMLElement,
-            iconPositions,
-            sortOrders,
-            { x, y },
-            entries,
-            setIconPositions,
-            exists
-          )
-        );
-      }
+        )
+      );
+    }
 
-      if (
-        moving &&
-        pasteEntries.some(([entry]) => dirname(entry) === DESKTOP_PATH)
-      ) {
-        saveUnpositionedDesktopIcons(setIconPositions);
-      }
+    if (
+      moving &&
+      pasteEntries.some(([entry]) => dirname(entry) === DESKTOP_PATH)
+    ) {
+      saveUnpositionedDesktopIcons(setIconPositions);
+    }
 
-      openTransferDialog(objectReaders);
-    },
-    [
-      copyEntries,
-      createPath,
-      directory,
-      exists,
-      iconPositions,
-      lstat,
-      openTransferDialog,
-      pasteList,
-      readFile,
-      readdir,
-      setIconPositions,
-      setPasteList,
-      sortOrders,
-      updateFolder,
-    ]
-  );
+    openTransferDialog(objectReaders);
+  };
   const sortByOrder = useSortBy(directory, files);
-  const folderActions = useMemo(
-    () => ({
-      addToFolder: () => addFile(directory, newPath),
-      newPath,
-      pasteToFolder,
-      resetFiles: () => setFiles(NO_FILES),
-      sortByOrder,
-    }),
-    [addFile, directory, newPath, pasteToFolder, sortByOrder]
-  );
+  const folderActions = {
+    addToFolder: () => addFile(directory, newPath),
+    newPath,
+    pasteToFolder,
+    resetFiles: () => setFiles(NO_FILES),
+    sortByOrder,
+  };
   const updatingFiles = useRef(false);
 
-  useEffect(() => {
-    if (directory !== currentDirectory) {
-      setIsLoading(true);
-      setCurrentDirectory(directory);
-      setFiles(NO_FILES);
-    }
-  }, [currentDirectory, directory]);
+  if (directory !== currentDirectory) {
+    setIsLoading(true);
+    setCurrentDirectory(directory);
+    setFiles(NO_FILES);
+  }
 
   useEffect(() => {
     if (sessionLoaded) {
@@ -769,8 +747,7 @@ const useFolder = (
         const fileNames = Object.keys(files);
 
         if (
-          sortOrder &&
-          fileNames.length === sortOrder.length &&
+          fileNames.length === sortOrder?.length &&
           directory === currentDirectory
         ) {
           if (fileNames.some((file) => !sortOrder.includes(file))) {
@@ -790,6 +767,7 @@ const useFolder = (
           } else if (
             fileNames.some((file, index) => file !== sortOrder[index])
           ) {
+            // eslint-disable-next-line react/set-state-in-effect -- Re-sorts loaded files when the session sort order changes
             setFiles((currentFiles) =>
               sortContents(currentFiles || files, sortOrder)
             );
@@ -829,7 +807,7 @@ const useFolder = (
       newShortcut,
       renameFile,
     },
-    files: files || {},
+    files: files || EMPTY_FILES,
     folderActions,
     isLoading,
     updateFiles,

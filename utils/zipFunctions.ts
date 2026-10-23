@@ -1,15 +1,15 @@
 import { basename, extname, join } from "path";
+import type SevenZip from "7z-wasm";
 import {
   type AsyncZipOptions,
   type AsyncZippable,
   type AsyncZippableFile,
   type Unzipped,
 } from "fflate";
-import type SevenZip from "7z-wasm";
-import { loadFiles } from "utils/functions";
 import { BASE_ZIP_CONFIG } from "utils/constants";
+import { loadFiles } from "utils/functions";
 
-export const createZippable = (path: string, file: Buffer): AsyncZippable =>
+export const createZippable = (path: string, file: Uint8Array): AsyncZippable =>
   path
     .split("/")
     .reduceRight<AsyncZippable>((value, key) => ({ [key]: value }), [
@@ -35,10 +35,46 @@ export const addEntryToZippable = (
   return oldZippable;
 };
 
-const unzipAsync = (zipFile: Buffer): Promise<Unzipped> =>
+const UNZIP_BATCH_SIZE = 64 * 1024 * 1024;
+
+const unzipAsync = (zipFile: Buffer, names?: string[]): Promise<Unzipped> =>
   new Promise((resolve, reject) => {
+    const batch = new Set(names);
+
     import("fflate").then(({ unzip }) =>
-      unzip(zipFile, (error, data) => (error ? reject(error) : resolve(data)))
+      unzip(
+        zipFile,
+        names ? { filter: ({ name }) => batch.has(name) } : {},
+        (error, data) => (error ? reject(error) : resolve(data))
+      )
+    );
+  });
+
+// A large zip runs out of memory unzipped all at once, so its entries are
+// grouped into batches which can be unzipped one after another
+export const getZipBatches = (zipFile: Buffer): Promise<string[][]> =>
+  new Promise((resolve, reject) => {
+    const batches: string[][] = [[]];
+    let batchSize = 0;
+
+    import("fflate").then(({ unzip }) =>
+      unzip(
+        zipFile,
+        {
+          filter: ({ name, originalSize }) => {
+            if (batchSize > 0 && batchSize + originalSize > UNZIP_BATCH_SIZE) {
+              batches.push([]);
+              batchSize = 0;
+            }
+
+            batches[batches.length - 1].push(name);
+            batchSize += originalSize;
+
+            return false;
+          },
+        },
+        (error) => (error ? reject(error) : resolve(batches))
+      )
     );
   });
 
@@ -62,9 +98,14 @@ export const addFileToZip = async (
 ): Promise<Buffer> =>
   Buffer.from(
     await zipAsync(
-      addEntryToZippable(
-        (buffer.length > 0 && (await unzipAsync(buffer))) || {},
-        createZippable(zipFilePath, await readFile(filePath))
+      // Nested entries get the directory entries js-dos needs to extract
+      Object.entries({
+        ...(buffer.length > 0 && (await unzipAsync(buffer))),
+        [zipFilePath]: await readFile(filePath),
+      }).reduce<AsyncZippable>(
+        (zippable, [path, file]) =>
+          addEntryToZippable(zippable, createZippable(path, file)),
+        {}
       )
     )
   );

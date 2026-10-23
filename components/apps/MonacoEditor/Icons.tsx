@@ -1,17 +1,20 @@
-import { memo } from "react";
-
-export const SaveIcon = memo(() => (
-  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+export const SaveIcon: FC = () => (
+  <svg
+    aria-hidden="true"
+    viewBox="0 0 16 16"
+    xmlns="http://www.w3.org/2000/svg"
+  >
     <path
       clipRule="evenodd"
       d="m13.353 1.146 1.5 1.5L15 3v11.5l-.5.5h-13l-.5-.5v-13l.5-.5H13l.353.146zM2 2v12h12V3.208L12.793 2H11v4H4V2H2zm6 0v3h2V2H8z"
       fillRule="evenodd"
     />
   </svg>
-));
+);
 
-export const ErrorIcon = memo(() => (
+export const ErrorIcon: FC = () => (
   <svg
+    aria-hidden="true"
     className="error"
     fill="currentColor"
     viewBox="0 0 16 16"
@@ -23,10 +26,11 @@ export const ErrorIcon = memo(() => (
       fillRule="evenodd"
     />
   </svg>
-));
+);
 
-export const InfoIcon = memo(() => (
+export const InfoIcon: FC = () => (
   <svg
+    aria-hidden="true"
     className="info"
     fill="currentColor"
     viewBox="0 0 16 16"
@@ -38,10 +42,11 @@ export const InfoIcon = memo(() => (
       fillRule="evenodd"
     />
   </svg>
-));
+);
 
-export const WarningIcon = memo(() => (
+export const WarningIcon: FC = () => (
   <svg
+    aria-hidden="true"
     className="warning"
     fill="currentColor"
     viewBox="0 0 16 16"
@@ -53,4 +58,4 @@ export const WarningIcon = memo(() => (
       fillRule="evenodd"
     />
   </svg>
-));
+);

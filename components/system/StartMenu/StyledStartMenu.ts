@@ -1,5 +1,5 @@
-import styled from "styled-components";
 import { m as motion } from "motion/react";
+import styled from "styled-components";
 import StyledFileEntry from "components/system/Files/Views/List/StyledFileEntry";
 import StyledFileManager from "components/system/Files/Views/List/StyledFileManager";
 import TaskbarPanel from "components/system/Taskbar/TaskbarPanel";
@@ -13,7 +13,7 @@ type StyledStartMenuProps = {
   $showScrolling: boolean;
 };
 
-const StyledStartMenu = styled(motion.nav)<StyledStartMenuProps>`
+const StyledStartMenu = styled(motion.section)<StyledStartMenuProps>`
   ${({ theme }) =>
     TaskbarPanel(theme.sizes.startMenu.maxHeight, theme.sizes.startMenu.size)}
 

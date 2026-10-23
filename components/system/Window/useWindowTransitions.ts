@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useState } from "react";
 import { type MotionProps, type Variant } from "motion/react";
-import { useProcesses } from "contexts/process";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type Position } from "react-rnd";
+import { useProcess } from "contexts/process";
 import { TASKBAR_HEIGHT, TRANSITIONS_IN_SECONDS } from "utils/constants";
 import { viewHeight, viewWidth } from "utils/functions";
 
@@ -37,6 +38,8 @@ const baseMinimize = {
   scale: 0.7,
 };
 
+const instant = { transition: { duration: 0 } };
+
 const getMaxDimensions = (): Variant => ({
   height: viewHeight() - TASKBAR_HEIGHT,
   width: viewWidth(),
@@ -44,60 +47,71 @@ const getMaxDimensions = (): Variant => ({
 
 const useWindowTransitions = (
   id: string,
+  position?: Position,
   noInitialScaling = false
 ): MotionProps => {
-  const { processes: { [id]: process } = {} } = useProcesses();
-  const { closing, componentWindow, maximized, minimized, taskbarEntry } =
-    process || {};
+  const {
+    closing,
+    componentWindow,
+    maximized = false,
+    minimized,
+    taskbarEntry,
+  } = useProcess(id);
+  const { x: positionX = 0, y: positionY = 0 } = position || {};
   const [maximize, setMaximize] = useState<Variant>(
     Object.create(null) as Variant
   );
   const [minimize, setMinimize] = useState<Variant>(
     Object.create(null) as Variant
   );
+  const wasMaximizedRef = useRef(false);
 
   useLayoutEffect(() => {
-    if (!componentWindow || closing) return;
+    if (closing) return;
 
-    const { x: windowX = 0, y: windowY = 0 } =
-      componentWindow.getBoundingClientRect();
+    // A viewport resize can clamp the restore position while maximized, which
+    // moves the Rnd wrapper instantly, so the offset back to the corner must too
+    const isRepositioning = maximized && wasMaximizedRef.current;
 
+    wasMaximizedRef.current = maximized;
     setMaximize({
       ...baseMaximize,
       ...getMaxDimensions(),
-      x: 0 - windowX,
-      y: 0 - windowY,
+      ...(isRepositioning ? instant : {}),
+      x: -positionX,
+      y: -positionY,
     });
-    // eslint-disable-next-line react-hooks-addons/no-unused-deps
-  }, [closing, componentWindow, maximized]);
+  }, [closing, maximized, positionX, positionY]);
 
   useLayoutEffect(() => {
-    if (!taskbarEntry || !componentWindow || closing) return;
+    const taskbarEntries = taskbarEntry?.closest("ol");
+    const rndWindow = componentWindow?.parentElement;
+    // Measured from the Rnd wrapper as it ignores the window's own transform
+    const alignWithTaskbarEntry = (transition?: typeof instant): void => {
+      if (!taskbarEntry || !rndWindow || closing) return;
 
-    const {
-      height: taskbarHeight = 0,
-      width: taskbarWidth = 0,
-      x: taskbarX = 0,
-      y: taskbarY = 0,
-    } = taskbarEntry.getBoundingClientRect();
-    const {
-      height: windowHeight = 0,
-      width: windowWidth = 0,
-      x: windowX = 0,
-      y: windowY = 0,
-    } = componentWindow.getBoundingClientRect();
+      const taskbar = taskbarEntry.getBoundingClientRect();
+      const rnd = rndWindow.getBoundingClientRect();
 
-    const x = Math.round(
-      taskbarX - windowX - windowWidth / 2 + taskbarWidth / 2
+      setMinimize({
+        ...baseMinimize,
+        ...transition,
+        x: Math.round(taskbar.x + taskbar.width / 2 - rnd.x - rnd.width / 2),
+        y: Math.round(taskbar.y + taskbar.height / 2 - rnd.y - rnd.height / 2),
+      });
+    };
+    // Entry shifts when one before it closes, so the hidden window follows
+    const taskbarObserver = new MutationObserver(() =>
+      alignWithTaskbarEntry(instant)
     );
-    const y = Math.round(
-      taskbarY - windowY - windowHeight / 2 + taskbarHeight / 2
-    );
 
-    if (!(x === 0 && y === 0)) {
-      setMinimize({ ...baseMinimize, x, y });
+    alignWithTaskbarEntry();
+
+    if (minimized && taskbarEntries) {
+      taskbarObserver.observe(taskbarEntries, { childList: true });
     }
-    // eslint-disable-next-line react-hooks-addons/no-unused-deps
+
+    return () => taskbarObserver.disconnect();
   }, [closing, componentWindow, minimized, taskbarEntry]);
 
   useEffect(() => {
@@ -106,6 +120,7 @@ const useWindowTransitions = (
         setMaximize((currentMaximize: Variant) => ({
           ...currentMaximize,
           ...getMaxDimensions(),
+          ...instant,
         }));
       }
     };

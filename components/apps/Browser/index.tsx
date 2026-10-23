@@ -1,11 +1,13 @@
 import { basename, join, resolve } from "path";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import useProxyMenu, {
-  type ProxyState,
-} from "components/apps/Browser/useProxyMenu";
-import { ADDRESS_INPUT_PROPS } from "components/apps/FileExplorer/AddressBar";
-import useHistoryMenu from "components/apps/Browser/useHistoryMenu";
-import useBookmarkMenu from "components/apps/Browser/useBookmarkMenu";
+import { useEffect, useRef, useState } from "react";
+import {
+  bookmarks,
+  DINO_GAME,
+  HOME_PAGE,
+  NOT_FOUND,
+  PROXIES,
+  SURF_TO_MISC,
+} from "components/apps/Browser/config";
 import {
   createDirectoryIndex,
   type DirectoryEntries,
@@ -17,19 +19,25 @@ import {
   Stop,
 } from "components/apps/Browser/NavigationIcons";
 import StyledBrowser from "components/apps/Browser/StyledBrowser";
-import {
-  DINO_GAME,
-  HOME_PAGE,
-  NOT_FOUND,
-  PROXIES,
-  SURF_TO_MISC,
-  bookmarks,
-} from "components/apps/Browser/config";
+import useBookmarkMenu from "components/apps/Browser/useBookmarkMenu";
+import useHistoryMenu from "components/apps/Browser/useHistoryMenu";
+import useProxyMenu, {
+  PROXY_SETTINGS,
+  type ProxyState,
+} from "components/apps/Browser/useProxyMenu";
+import { ADDRESS_INPUT_PROPS } from "components/apps/FileExplorer/AddressBar";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
+import {
+  getInfoWithExtension,
+  getModifiedTime,
+  getShortcutInfo,
+} from "components/system/Files/FileEntry/functions";
 import useTitle from "components/system/Window/useTitle";
-import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
+import { useFileSystemActions, useFs } from "contexts/fileSystem";
+import { useMenu } from "contexts/menu";
+import { hasProcess, useProcess, useProcessesActions } from "contexts/process";
 import processDirectory from "contexts/process/directory";
+import { useForegroundId, useSessionActions } from "contexts/session";
 import useHistory from "hooks/useHistory";
 import Button from "styles/common/Button";
 import Icon from "styles/common/Icon";
@@ -37,25 +45,21 @@ import {
   FAVICON_BASE_PATH,
   IFRAME_CONFIG,
   ONE_TIME_PASSIVE_EVENT,
+  PREVENT_SCROLL,
   SHORTCUT_EXTENSION,
 } from "utils/constants";
 import {
-  GOOGLE_SEARCH_QUERY,
-  LOCAL_HOST,
   getExtension,
   getUrlOrSearch,
+  GOOGLE_SEARCH_QUERY,
   haltEvent,
   label,
+  LOCAL_HOST,
 } from "utils/functions";
-import {
-  getInfoWithExtension,
-  getModifiedTime,
-  getShortcutInfo,
-} from "components/system/Files/FileEntry/functions";
-import { useSession } from "contexts/session";
+import { isComposingKey } from "utils/keyboard";
 
 declare module "react" {
-  interface IframeHTMLAttributes<T> extends React.HTMLAttributes<T> {
+  interface IframeHTMLAttributes<T> extends HTMLAttributes<T> {
     credentialless?: "credentialless";
   }
 }
@@ -64,17 +68,18 @@ const Browser: FC<ComponentProcessProps> = ({ id }) => {
   const {
     icon: setIcon,
     linkElement,
-    url: changeUrl,
-    processes: { [id]: process },
     open,
-  } = useProcesses();
-  const { setForegroundId, updateRecentFiles } = useSession();
+    url: changeUrl,
+  } = useProcessesActions();
+  const process = useProcess(id);
+  const { setForegroundId, updateRecentFiles } = useSessionActions();
   const { prependFileToTitle } = useTitle(id);
-  const { initialTitle = "", url = "" } = process || {};
+  const { initialTitle = "", url = "" } = process;
   const initialUrl = url || HOME_PAGE;
   const { canGoBack, canGoForward, history, moveHistory, position } =
     useHistory(initialUrl, id);
-  const { exists, fs, stat, readFile, readdir } = useFileSystem();
+  const { exists, readdir, readFile, stat } = useFileSystemActions();
+  const fs = useFs();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [loading, setLoading] = useState(false);
@@ -92,7 +97,7 @@ const Browser: FC<ComponentProcessProps> = ({ id }) => {
     let isSrcDoc = false;
 
     try {
-      isSrcDoc = contentWindow.location?.pathname === "srcdoc";
+      isSrcDoc = contentWindow.location.pathname === "srcdoc";
     } catch {
       // Ignore failure to read iframe window path
     }
@@ -104,16 +109,13 @@ const Browser: FC<ComponentProcessProps> = ({ id }) => {
       contentWindow.location?.replace(newUrl);
     }
   };
-  const goToLink = useCallback(
-    (newUrl: string): void => {
-      if (inputRef.current) {
-        inputRef.current.value = newUrl;
-      }
+  const goToLink = (newUrl: string): void => {
+    if (inputRef.current) {
+      inputRef.current.value = newUrl;
+    }
 
-      changeUrl(id, newUrl);
-    },
-    [changeUrl, id]
-  );
+    changeUrl(id, newUrl);
+  };
   const { backMenu, forwardMenu } = useHistoryMenu(
     history,
     position,
@@ -121,286 +123,260 @@ const Browser: FC<ComponentProcessProps> = ({ id }) => {
   );
   const [proxyState, setProxyState] = useState<ProxyState>("CORS");
   const proxyMenu = useProxyMenu(proxyState, setProxyState);
+  const { label: openMenu } = useMenu();
+  const foregroundId = useForegroundId();
   const bookmarkMenu = useBookmarkMenu();
-  const setUrl = useCallback(
-    async (addressInput: string): Promise<void> => {
-      const { contentWindow } = iframeRef.current || {};
+  const setUrl = async (addressInput: string): Promise<void> => {
+    const { contentWindow } = iframeRef.current || {};
 
-      if (contentWindow?.location) {
-        const isHtml =
-          [".htm", ".html"].includes(getExtension(addressInput)) &&
-          (await exists(addressInput));
+    if (contentWindow?.location) {
+      const isHtml =
+        [".htm", ".html"].includes(getExtension(addressInput)) &&
+        (await exists(addressInput));
 
-        setLoading(true);
-        if (isHtml) setSrcDoc((await readFile(addressInput)).toString());
-        setIcon(id, processDirectory.Browser.icon);
+      setLoading(true);
+      if (isHtml) setSrcDoc((await readFile(addressInput)).toString());
+      setIcon(id, processDirectory.Browser.icon);
 
-        const loadLocalSite = (localPath: string, localTitle: string): void => {
-          iframeRef.current?.removeAttribute("sandbox");
-          changeIframeWindowLocation(
-            `${window.location.origin}${localPath}`,
-            contentWindow
+      const loadLocalSite = (localPath: string, localTitle: string): void => {
+        iframeRef.current?.removeAttribute("sandbox");
+        changeIframeWindowLocation(
+          `${window.location.origin}${localPath}`,
+          contentWindow
+        );
+        prependFileToTitle(localTitle);
+      };
+      const lowerAddressInput = addressInput.toLowerCase();
+
+      if (lowerAddressInput.startsWith(SURF_TO_MISC.url)) {
+        loadLocalSite(SURF_TO_MISC.path, SURF_TO_MISC.name);
+      } else if (lowerAddressInput.startsWith(DINO_GAME.url)) {
+        loadLocalSite(DINO_GAME.path, `${DINO_GAME.url}/`);
+      } else if (!isHtml) {
+        iframeRef.current?.setAttribute("sandbox", IFRAME_CONFIG.sandbox);
+
+        const processedUrl = await getUrlOrSearch(addressInput);
+
+        if (LOCAL_HOST.has(processedUrl.host) || LOCAL_HOST.has(addressInput)) {
+          const directory =
+            decodeURI(processedUrl.pathname).replace(/\/$/, "") || "/";
+          const searchParams = Object.fromEntries(
+            new URLSearchParams(processedUrl.search.replace(";", "&")).entries()
           );
-          prependFileToTitle(localTitle);
-        };
-        const lowerAddressInput = addressInput.toLowerCase();
+          const { C: column, O: order } = searchParams;
+          const isAscending = !order || order === "A";
 
-        if (lowerAddressInput.startsWith(SURF_TO_MISC.url)) {
-          loadLocalSite(SURF_TO_MISC.path, SURF_TO_MISC.name);
-        } else if (lowerAddressInput.startsWith(DINO_GAME.url)) {
-          loadLocalSite(DINO_GAME.path, `${DINO_GAME.url}/`);
-        } else if (!isHtml) {
-          iframeRef.current?.setAttribute("sandbox", IFRAME_CONFIG.sandbox);
-
-          const processedUrl = await getUrlOrSearch(addressInput);
+          let newSrcDoc = NOT_FOUND;
+          let newTitle = "404 Not Found";
 
           if (
-            LOCAL_HOST.has(processedUrl.host) ||
-            LOCAL_HOST.has(addressInput)
+            (await exists(directory)) &&
+            (await stat(directory)).isDirectory()
           ) {
-            const directory =
-              decodeURI(processedUrl.pathname).replace(/\/$/, "") || "/";
-            const searchParams = Object.fromEntries(
-              new URLSearchParams(
-                processedUrl.search.replace(";", "&")
-              ).entries()
-            );
-            const { O: order, C: column } = searchParams;
-            const isAscending = !order || order === "A";
+            const dirStats = (
+              await Promise.all<DirectoryEntries>(
+                (await readdir(directory)).map(async (entry) => {
+                  const href = join(directory, entry);
+                  let description;
+                  let shortcutUrl;
 
-            let newSrcDoc = NOT_FOUND;
-            let newTitle = "404 Not Found";
-
-            if (
-              (await exists(directory)) &&
-              (await stat(directory)).isDirectory()
-            ) {
-              const dirStats = (
-                await Promise.all<DirectoryEntries>(
-                  (await readdir(directory)).map(async (entry) => {
-                    const href = join(directory, entry);
-                    let description;
-                    let shortcutUrl;
-
-                    if (getExtension(entry) === SHORTCUT_EXTENSION) {
-                      try {
-                        ({ comment: description, url: shortcutUrl } =
-                          getShortcutInfo(await readFile(href)));
-                      } catch {
-                        // Ignore failure to read shortcut
-                      }
+                  if (getExtension(entry) === SHORTCUT_EXTENSION) {
+                    try {
+                      ({ comment: description, url: shortcutUrl } =
+                        getShortcutInfo(await readFile(href)));
+                    } catch {
+                      // Ignore failure to read shortcut
                     }
-
-                    const filePath =
-                      shortcutUrl && (await exists(shortcutUrl))
-                        ? shortcutUrl
-                        : href;
-                    const stats = await stat(filePath);
-                    const isDir = stats.isDirectory();
-
-                    return {
-                      description,
-                      href: isDir && shortcutUrl ? shortcutUrl : href,
-                      icon: isDir ? "folder" : undefined,
-                      modified: getModifiedTime(filePath, stats),
-                      size: isDir || shortcutUrl ? undefined : stats.size,
-                    };
-                  })
-                )
-              )
-                .sort(
-                  (a, b) =>
-                    Number(b.icon === "folder") - Number(a.icon === "folder")
-                )
-                .sort((a, b) => {
-                  const aIsFolder = a.icon === "folder";
-                  const bIsFolder = b.icon === "folder";
-
-                  if (aIsFolder === bIsFolder) {
-                    const aName = basename(a.href);
-                    const bName = basename(b.href);
-
-                    if (isAscending) return aName < bName ? -1 : 1;
-
-                    return aName > bName ? -1 : 1;
                   }
 
-                  return 0;
-                })
-                .sort((a, b) => {
-                  if (!column || column === "N") return 0;
+                  const filePath =
+                    shortcutUrl && (await exists(shortcutUrl))
+                      ? shortcutUrl
+                      : href;
+                  const stats = await stat(filePath);
+                  const isDir = stats.isDirectory();
 
-                  const sortValue = (
-                    getValue: (entry: DirectoryEntries) => number | string
-                  ): number => {
-                    const aValue = getValue(a);
-                    const bValue = getValue(b);
-
-                    if (aValue === bValue) return 0;
-                    if (isAscending) return aValue < bValue ? -1 : 1;
-
-                    return aValue > bValue ? -1 : 1;
+                  return {
+                    description,
+                    href: isDir && shortcutUrl ? shortcutUrl : href,
+                    icon: isDir ? "folder" : undefined,
+                    modified: getModifiedTime(filePath, stats),
+                    size: isDir || shortcutUrl ? undefined : stats.size,
                   };
-
-                  if (column === "S") {
-                    return sortValue(({ size }) => size ?? 0);
-                  }
-
-                  if (column === "M") {
-                    return sortValue(({ modified }) => modified ?? 0);
-                  }
-
-                  if (column === "D") {
-                    return sortValue(({ description }) => description ?? "");
-                  }
-
-                  return 0;
                 })
-                .sort(
-                  (a, b) =>
-                    Number(b.icon === "folder") - Number(a.icon === "folder")
-                );
+              )
+            )
+              .sort(
+                (a, b) =>
+                  Number(b.icon === "folder") - Number(a.icon === "folder")
+              )
+              .sort((a, b) => {
+                const aIsFolder = a.icon === "folder";
+                const bIsFolder = b.icon === "folder";
 
-              iframeRef.current?.addEventListener(
-                "load",
-                () => {
-                  try {
-                    contentWindow.document.body
-                      .querySelectorAll("a")
-                      .forEach((a) => {
-                        a.addEventListener("click", (event) => {
-                          event.preventDefault();
+                if (aIsFolder === bIsFolder) {
+                  const aName = basename(a.href);
+                  const bName = basename(b.href);
 
-                          const target =
-                            event.currentTarget as HTMLAnchorElement;
-                          const isDir =
-                            target.getAttribute("type") === "folder";
-                          const { origin, pathname, search } = new URL(
-                            target.href
-                          );
+                  if (isAscending) return aName < bName ? -1 : 1;
 
-                          if (search) {
-                            goToLink(
-                              `${origin}${encodeURI(directory)}${search}`
-                            );
-                          } else if (isDir) {
-                            goToLink(target.href);
-                          } else if (fs && target.href) {
-                            getInfoWithExtension(
-                              fs,
-                              decodeURI(pathname),
-                              getExtension(pathname),
-                              ({ pid, url: infoUrl }) => {
-                                open(pid || "OpenWith", { url: infoUrl });
+                  return aName > bName ? -1 : 1;
+                }
 
-                                if (pid && infoUrl) {
-                                  updateRecentFiles(infoUrl, pid);
-                                }
+                return 0;
+              })
+              .sort((a, b) => {
+                if (!column || column === "N") return 0;
+
+                const sortValue = (
+                  getValue: (entry: DirectoryEntries) => number | string
+                ): number => {
+                  const aValue = getValue(a);
+                  const bValue = getValue(b);
+
+                  if (aValue === bValue) return 0;
+                  if (isAscending) return aValue < bValue ? -1 : 1;
+
+                  return aValue > bValue ? -1 : 1;
+                };
+
+                if (column === "S") {
+                  return sortValue(({ size }) => size ?? 0);
+                }
+
+                if (column === "M") {
+                  return sortValue(({ modified }) => modified ?? 0);
+                }
+
+                if (column === "D") {
+                  return sortValue(({ description }) => description ?? "");
+                }
+
+                return 0;
+              })
+              .sort(
+                (a, b) =>
+                  Number(b.icon === "folder") - Number(a.icon === "folder")
+              );
+
+            iframeRef.current?.addEventListener(
+              "load",
+              () => {
+                try {
+                  contentWindow.document.body
+                    .querySelectorAll("a")
+                    .forEach((a) => {
+                      a.addEventListener("click", (event) => {
+                        event.preventDefault();
+
+                        const target = event.currentTarget as HTMLAnchorElement;
+                        const isDir = target.getAttribute("type") === "folder";
+                        const { origin, pathname, search } = new URL(
+                          target.href
+                        );
+
+                        if (search) {
+                          goToLink(`${origin}${encodeURI(directory)}${search}`);
+                        } else if (isDir) {
+                          goToLink(target.href);
+                        } else if (fs && target.href) {
+                          getInfoWithExtension(
+                            fs,
+                            decodeURI(pathname),
+                            getExtension(pathname),
+                            ({ pid, url: infoUrl }) => {
+                              open(pid || "OpenWith", { url: infoUrl });
+
+                              if (pid && infoUrl) {
+                                updateRecentFiles(infoUrl, pid);
                               }
-                            );
-                          }
-                        });
+                            }
+                          );
+                        }
                       });
-                  } catch {
-                    // Ignore failure to add click event listeners
-                  }
-                },
-                ONE_TIME_PASSIVE_EVENT
-              );
+                    });
+                } catch {
+                  // Ignore failure to add click event listeners
+                }
+              },
+              ONE_TIME_PASSIVE_EVENT
+            );
 
-              newSrcDoc = createDirectoryIndex(
-                directory,
-                processedUrl.origin,
-                searchParams,
-                directory === "/"
-                  ? dirStats
-                  : [
-                      {
-                        href: resolve(directory, ".."),
-                        icon: "back",
-                      },
-                      ...dirStats,
-                    ]
-              );
+            newSrcDoc = createDirectoryIndex(
+              directory,
+              processedUrl.origin,
+              searchParams,
+              directory === "/"
+                ? dirStats
+                : [
+                    {
+                      href: resolve(directory, ".."),
+                      icon: "back",
+                    },
+                    ...dirStats,
+                  ]
+            );
 
-              newTitle = `Index of ${directory}`;
-            }
+            newTitle = `Index of ${directory}`;
+          }
 
-            setSrcDoc(newSrcDoc);
-            prependFileToTitle(newTitle);
+          setSrcDoc(newSrcDoc);
+          prependFileToTitle(newTitle);
+        } else {
+          const addressUrl = PROXIES[proxyState]
+            ? await PROXIES[proxyState](processedUrl.href)
+            : processedUrl.href;
+
+          changeIframeWindowLocation(addressUrl, contentWindow);
+
+          if (addressUrl.startsWith(GOOGLE_SEARCH_QUERY)) {
+            prependFileToTitle(`${addressInput} - Google Search`);
           } else {
-            const addressUrl = PROXIES[proxyState]
-              ? await PROXIES[proxyState](processedUrl.href)
-              : processedUrl.href;
+            const { name = initialTitle } =
+              bookmarks?.find(
+                ({ url: bookmarkUrl }) => bookmarkUrl === addressInput
+              ) || {};
 
-            changeIframeWindowLocation(addressUrl, contentWindow);
+            prependFileToTitle(name);
+          }
 
-            if (addressUrl.startsWith(GOOGLE_SEARCH_QUERY)) {
-              prependFileToTitle(`${addressInput} - Google Search`);
-            } else {
-              const { name = initialTitle } =
-                bookmarks?.find(
-                  ({ url: bookmarkUrl }) => bookmarkUrl === addressInput
-                ) || {};
+          if (addressInput.startsWith("ipfs://")) {
+            setIcon(id, "/System/Icons/Favicons/ipfs.webp");
+          } else {
+            const favicon = new Image();
+            const faviconUrl = `${
+              new URL(addressUrl).origin
+            }${FAVICON_BASE_PATH}`;
 
-              prependFileToTitle(name);
-            }
+            favicon.addEventListener(
+              "error",
+              () => {
+                const { icon } =
+                  bookmarks?.find(
+                    ({ url: bookmarkUrl }) => bookmarkUrl === addressUrl
+                  ) || {};
 
-            if (addressInput.startsWith("ipfs://")) {
-              setIcon(id, "/System/Icons/Favicons/ipfs.webp");
-            } else {
-              const favicon = new Image();
-              const faviconUrl = `${
-                new URL(addressUrl).origin
-              }${FAVICON_BASE_PATH}`;
-
-              favicon.addEventListener(
-                "error",
-                () => {
-                  const { icon } =
-                    bookmarks?.find(
-                      ({ url: bookmarkUrl }) => bookmarkUrl === addressUrl
-                    ) || {};
-
-                  if (icon) setIcon(id, icon);
-                },
-                ONE_TIME_PASSIVE_EVENT
-              );
-              favicon.addEventListener(
-                "load",
-                () => setIcon(id, faviconUrl),
-                ONE_TIME_PASSIVE_EVENT
-              );
-              favicon.decoding = "async";
-              favicon.src = faviconUrl;
-            }
+                if (icon) setIcon(id, icon);
+              },
+              ONE_TIME_PASSIVE_EVENT
+            );
+            favicon.addEventListener(
+              "load",
+              () => setIcon(id, faviconUrl),
+              ONE_TIME_PASSIVE_EVENT
+            );
+            favicon.decoding = "async";
+            favicon.src = faviconUrl;
           }
         }
       }
-    },
-    [
-      exists,
-      fs,
-      goToLink,
-      id,
-      initialTitle,
-      open,
-      prependFileToTitle,
-      proxyState,
-      readFile,
-      readdir,
-      setIcon,
-      stat,
-      updateRecentFiles,
-    ]
-  );
-  const supportsCredentialless = useMemo(
-    () => "credentialless" in HTMLIFrameElement.prototype,
-    []
-  );
+    }
+  };
+  const supportsCredentialless =
+    "credentialless" in HTMLIFrameElement.prototype;
 
   useEffect(() => {
-    if (process && history[position] !== currentUrl.current) {
+    if (hasProcess(process) && history[position] !== currentUrl.current) {
       currentUrl.current = history[position];
       setUrl(history[position]);
     }
@@ -414,12 +390,12 @@ const Browser: FC<ComponentProcessProps> = ({ id }) => {
 
   return (
     <StyledBrowser $hasSrcDoc={Boolean(srcDoc)}>
-      <nav>
+      <nav aria-label="Toolbar">
         <div>
           <Button
             disabled={!canGoBack}
             onClick={() => changeHistory(-1)}
-            {...label("Click to go back")}
+            {...label("Click to go back", "Back")}
             {...backMenu}
           >
             <Arrow direction="left" />
@@ -427,7 +403,7 @@ const Browser: FC<ComponentProcessProps> = ({ id }) => {
           <Button
             disabled={!canGoForward}
             onClick={() => changeHistory(1)}
-            {...label("Click to go forward")}
+            {...label("Click to go forward", "Forward")}
             {...forwardMenu}
           >
             <Arrow direction="right" />
@@ -436,38 +412,47 @@ const Browser: FC<ComponentProcessProps> = ({ id }) => {
             disabled={loading}
             onClick={() => setUrl(history[position])}
             onContextMenu={haltEvent}
-            {...label("Reload this page")}
+            {...label("Reload this page", "Reload")}
           >
             {loading ? <Stop /> : <Refresh />}
           </Button>
         </div>
         <input
           ref={inputRef}
+          aria-label="Address and search bar"
           defaultValue={initialUrl}
           onFocusCapture={() => inputRef.current?.select()}
-          onKeyDown={({ key }) => {
-            if (inputRef.current && key === "Enter") {
+          onKeyDown={({ key, nativeEvent }) => {
+            if (
+              inputRef.current &&
+              key === "Enter" &&
+              !isComposingKey(nativeEvent)
+            ) {
               changeUrl(id, inputRef.current.value);
               if (currentUrl.current === inputRef.current.value) {
                 setUrl(inputRef.current.value);
               }
               window.getSelection()?.removeAllRanges();
-              inputRef.current.blur();
+              // Like Chrome, focus moves on to the page
+              iframeRef.current?.focus(PREVENT_SCROLL);
             }
           }}
           {...ADDRESS_INPUT_PROPS}
         />
         <Button
+          // Every browser shares this menu name, but only the active one opens it
+          aria-expanded={openMenu === PROXY_SETTINGS && foregroundId === id}
+          aria-haspopup="menu"
           className="proxy"
           onClick={proxyMenu.onContextMenuCapture}
           onContextMenu={haltEvent}
-          {...label("Proxy settings")}
+          {...label(PROXY_SETTINGS)}
         >
           <Network />
         </Button>
       </nav>
-      <nav>
-        {bookmarks.map(({ name, icon, url: bookmarkUrl }) => (
+      <nav aria-label="Bookmarks">
+        {bookmarks.map(({ icon, name, url: bookmarkUrl }) => (
           <Button
             key={name}
             onClick={({ ctrlKey }) => {
@@ -480,29 +465,37 @@ const Browser: FC<ComponentProcessProps> = ({ id }) => {
             {...label(
               `${name}\n${bookmarkUrl
                 .replace(/^http:\/\//, "")
-                .replace(/\/$/, "")}`
+                .replace(/\/$/, "")}`,
+              name
             )}
             {...bookmarkMenu}
           >
-            <Icon alt={name} imgSize={16} src={icon} singleSrc />
+            <Icon alt="" imgSize={16} src={icon} singleSrc />
           </Button>
         ))}
       </nav>
       <iframe
         ref={iframeRef}
+        // Only the page content is busy while loading; the toolbar stays
+        // fully operable
+        aria-busy={loading || undefined}
         onLoad={() => {
-          try {
-            iframeRef.current?.contentWindow?.addEventListener("focus", () =>
-              setForegroundId(id)
-            );
-          } catch {
-            // Ignore failure to add focus event listener
+          const { contentWindow } = iframeRef.current || {};
+
+          if (contentWindow) {
+            try {
+              contentWindow.addEventListener("focus", () =>
+                setForegroundId(id)
+              );
+            } catch {
+              // Ignore failure to add focus event listener
+            }
           }
 
           if (loading) setLoading(false);
         }}
         srcDoc={srcDoc || undefined}
-        title={id}
+        title={process.title}
         {...IFRAME_CONFIG}
         credentialless={supportsCredentialless ? "credentialless" : undefined}
       />
@@ -510,4 +503,4 @@ const Browser: FC<ComponentProcessProps> = ({ id }) => {
   );
 };
 
-export default memo(Browser);
+export default Browser;

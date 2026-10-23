@@ -1,16 +1,17 @@
-import { Fragment, memo, useEffect, useMemo, useState } from "react";
-import useExif from "components/system/Dialogs/Properties/useExif";
-import useMediaType from "components/system/Dialogs/Properties/useMediaType";
+import { Fragment, useEffect, useState } from "react";
 import { type PropertiesMetaData } from "components/system/Dialogs/Properties";
 import Buttons from "components/system/Dialogs/Properties/Buttons";
 import StyledDetailsTab from "components/system/Dialogs/Properties/StyledDetailsTab";
-import { useFileSystem } from "contexts/fileSystem";
+import useExif from "components/system/Dialogs/Properties/useExif";
+import useMediaType from "components/system/Dialogs/Properties/useMediaType";
+import { useFileSystemActions } from "contexts/fileSystem";
 
 type TabProps = {
   hasExif: boolean;
   id: string;
   metaData: PropertiesMetaData;
   setMetaData: React.Dispatch<React.SetStateAction<PropertiesMetaData>>;
+  tabPanel: React.HTMLAttributes<HTMLElement>;
   url?: string;
 };
 
@@ -19,13 +20,11 @@ const DetailsTab: FC<TabProps> = ({
   id,
   metaData,
   setMetaData,
+  tabPanel,
   url,
 }) => {
-  const loading = useMemo(
-    () => !(metaData.exif || metaData.mediaType),
-    [metaData]
-  );
-  const { readFile } = useFileSystem();
+  const loading = !(metaData.exif || metaData.mediaType);
+  const { readFile } = useFileSystemActions();
   const [fileData, setFileData] = useState<Buffer | undefined>();
 
   useExif(hasExif ? fileData : undefined, metaData.exif, setMetaData);
@@ -37,18 +36,23 @@ const DetailsTab: FC<TabProps> = ({
 
   return (
     <>
-      <StyledDetailsTab>
-        <table>
+      <StyledDetailsTab aria-busy={loading || undefined} {...tabPanel}>
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Like the scrolling list of Windows, which not every browser lets Tab reach */}
+        <table aria-label="Details" tabIndex={0}>
           <thead>
             <tr>
-              <th className="property">Property</th>
-              <th className="value">Value</th>
+              <th className="property" scope="col">
+                Property
+              </th>
+              <th className="value" scope="col">
+                Value
+              </th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr className="header">
-                <td>Loading...</td>
+                <td colSpan={2}>Loading...</td>
               </tr>
             )}
             {!loading &&
@@ -58,7 +62,7 @@ const DetailsTab: FC<TabProps> = ({
                   <Fragment key={`${key}${index}`}>
                     <tr className="header">
                       <th>{key}</th>
-                      <th className="line" />
+                      <th aria-hidden="true" className="line" />
                     </tr>
                     {Object.entries(data)
                       .filter(
@@ -67,7 +71,9 @@ const DetailsTab: FC<TabProps> = ({
                       )
                       .map(([dataKey, value]) => (
                         <tr key={`${dataKey}-${value}`}>
-                          <th title={dataKey}>{dataKey}</th>
+                          <th scope="row" title={dataKey}>
+                            {dataKey}
+                          </th>
                           <td>
                             {typeof value === "string" &&
                             value.startsWith("blob:") ? (
@@ -94,4 +100,4 @@ const DetailsTab: FC<TabProps> = ({
   );
 };
 
-export default memo(DetailsTab);
+export default DetailsTab;

@@ -1,6 +1,5 @@
-import { memo } from "react";
 import StyledButton from "components/system/Dialogs/StyledButton";
-import { useProcesses } from "contexts/process";
+import { useProcessesActions } from "contexts/process";
 
 type ButtonsProps = {
   id: string;
@@ -8,15 +7,15 @@ type ButtonsProps = {
 };
 
 const Buttons: FC<ButtonsProps> = ({ id, onClick }) => {
-  const { closeWithTransition } = useProcesses();
+  const { closeWithTransition } = useProcessesActions();
   const close = (): void => closeWithTransition(id);
 
   return (
-    <nav className="buttons">
+    <nav className="buttons" role="presentation">
       <StyledButton onClick={onClick || close}>OK</StyledButton>
       <StyledButton onClick={close}>Cancel</StyledButton>
     </nav>
   );
 };
 
-export default memo(Buttons);
+export default Buttons;
