@@ -26,6 +26,9 @@ jobs:
         run: yarn
       - name: Run Jest Unit Tests
         run: yarn test
+      # Type-aware lint resolves imports of the generated public/.index/*.json
+      - name: Generate File Indexes
+        run: yarn build:prebuild
       - name: Run Oxlint
         run: yarn lint
 
