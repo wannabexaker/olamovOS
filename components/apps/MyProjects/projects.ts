@@ -60,12 +60,47 @@ export const PROJECTS: Project[] = [
   {
     accent: "#7c5cff",
     appId: "FitSentry",
-    description: "",
+    description:
+      "Fully offline Android fitness & nutrition coach — runs on the phone alone, with no account, no server and no network.",
     embeddable: false,
     icon: "/System/Icons/olamov-fitsentry.png",
     name: "Fit Sentry",
     tags: ["Android", "Google Play"],
     url: "https://play.google.com/store/apps/details?id=com.fitsentry.app",
+  },
+  // Accent and icon below are neutral placeholders until they get their own.
+  {
+    accent: "#8a8a8a",
+    appId: "NetSentry",
+    description:
+      "Home-network guard on a Raspberry Pi: watches a MikroTik router and Pi-hole, and alerts and acts from Telegram.",
+    embeddable: false,
+    icon: "/System/Icons/olamov-unknown.png",
+    name: "NetSentry",
+    tags: ["Raspberry Pi", "Telegram", "Self-hosted"],
+    url: "https://github.com/wannabexaker/NetSentry",
+  },
+  {
+    accent: "#8a8a8a",
+    appId: "HIDwayPlus",
+    description:
+      "Hardware remote keyboard and mouse: a Windows client drives a Pi relay and a Pico that is a real USB device, so it works at the login screen and in the BIOS.",
+    embeddable: false,
+    icon: "/System/Icons/olamov-unknown.png",
+    name: "HIDway+",
+    tags: ["Hardware", "USB HID", "Raspberry Pi"],
+    url: "https://github.com/wannabexaker/HIDway-Plus",
+  },
+  {
+    accent: "#8a8a8a",
+    appId: "PMD",
+    description:
+      "Project-management app: Spring Boot + MongoDB API with a React frontend.",
+    embeddable: false,
+    icon: "/System/Icons/olamov-unknown.png",
+    name: "PMD",
+    tags: ["Spring Boot", "MongoDB", "Dormant"],
+    url: "https://pmd.olamov.com/",
   },
 ];
 

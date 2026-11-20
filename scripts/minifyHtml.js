@@ -53,25 +53,9 @@ const getCommitHash = () => {
   return commit;
 };
 
-const getRepoUrl = () => {
-  let url = "";
-
-  try {
-    url = execSync("git config --get remote.origin.url", {
-      cwd: __dirname,
-    })
-      .toString()
-      .trim();
-
-    if (url.endsWith(".git")) {
-      url = url.slice(0, -4);
-    }
-  } catch {
-    // Ignore failure to get commit hash from git
-  }
-
-  return url;
-};
+// Hard-coded on purpose: in CI/Cloudflare Pages builds `remote.origin.url`
+// carries the build's GitHub access token, which ended up in the served HTML.
+const REPO_URL = "https://github.com/wannabexaker/olamovOS";
 
 const CODE_REPLACE_FUNCTIONS = [
   (html) => html.replace(/<noscript (.*)><\/noscript>/, ""),
@@ -111,11 +95,7 @@ readdirSync(OUT_PATH).forEach(async (entry) => {
       minifiedHtml = changedCode;
     });
 
-    const repoUrl = getRepoUrl();
-
-    if (repoUrl) {
-      minifiedHtml = `<!-- ${repoUrl} -->\n${minifiedHtml}`;
-    }
+    minifiedHtml = `<!-- ${REPO_URL} -->\n${minifiedHtml}`;
 
     writeFileSync(fullPath, minifiedHtml);
   }
