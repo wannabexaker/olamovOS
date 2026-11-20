@@ -52,6 +52,13 @@ jobs:
         run: yarn
       - name: Build App
         run: yarn build
+      # A git remote with the build token once leaked into the served HTML
+      - name: Check Build Output For Credentials
+        run: |
+          if grep -rIlE 'x-access-token|gh[opsu]_[A-Za-z0-9]{20,}|github_pat_|://[^/@ ]+@github\.com' out; then
+            echo "::error::Credential-like string in build output"
+            exit 1
+          fi
       - name: Install Playwright Browser
         run: yarn playwright install --with-deps ${{ matrix.project }}
       # Fork config: upstream's suite minus tests of UI Olamov replaced.
