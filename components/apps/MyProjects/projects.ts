@@ -89,7 +89,7 @@ export const PROJECTS: Project[] = [
     icon: "/System/Icons/olamov-hidway.png",
     name: "HIDway+",
     tags: ["Hardware", "USB HID", "Raspberry Pi"],
-    url: "https://github.com/wannabexaker/HIDway-Plus",
+    url: "https://hidway.olamov.com/",
   },
   {
     accent: "#8a8a8a",
@@ -101,6 +101,17 @@ export const PROJECTS: Project[] = [
     name: "PMD",
     tags: ["Spring Boot", "MongoDB", "Dormant"],
     url: "https://pmd.olamov.com/",
+  },
+  {
+    accent: "#8a8a8a",
+    appId: "Aion2Guru",
+    description:
+      "Free AION 2 companion for Windows: damage, healing and damage taken meters, nearby cube radar, gathering and event timers.",
+    embeddable: false,
+    icon: "/System/Icons/olamov-guru.png",
+    name: "Aion2Guru",
+    tags: ["Windows", "AION 2", "Game companion"],
+    url: "https://guru.olamov.com/",
   },
 ];
 
