@@ -68,14 +68,14 @@ export const PROJECTS: Project[] = [
     tags: ["Android", "Google Play"],
     url: "https://play.google.com/store/apps/details?id=com.fitsentry.app",
   },
-  // Accent and icon below are neutral placeholders until they get their own.
+  // Accent below is a neutral placeholder; icons are each app's own artwork.
   {
     accent: "#8a8a8a",
     appId: "NetSentry",
     description:
       "Home-network guard on a Raspberry Pi: watches a MikroTik router and Pi-hole, and alerts and acts from Telegram.",
     embeddable: false,
-    icon: "/System/Icons/olamov-unknown.png",
+    icon: "/System/Icons/olamov-netsentry.png",
     name: "NetSentry",
     tags: ["Raspberry Pi", "Telegram", "Self-hosted"],
     url: "https://github.com/wannabexaker/NetSentry",
@@ -86,7 +86,7 @@ export const PROJECTS: Project[] = [
     description:
       "Hardware remote keyboard and mouse: a Windows client drives a Pi relay and a Pico that is a real USB device, so it works at the login screen and in the BIOS.",
     embeddable: false,
-    icon: "/System/Icons/olamov-unknown.png",
+    icon: "/System/Icons/olamov-hidway.png",
     name: "HIDway+",
     tags: ["Hardware", "USB HID", "Raspberry Pi"],
     url: "https://github.com/wannabexaker/HIDway-Plus",
@@ -97,7 +97,7 @@ export const PROJECTS: Project[] = [
     description:
       "Project-management app: Spring Boot + MongoDB API with a React frontend.",
     embeddable: false,
-    icon: "/System/Icons/olamov-unknown.png",
+    icon: "/System/Icons/olamov-pmd.png",
     name: "PMD",
     tags: ["Spring Boot", "MongoDB", "Dormant"],
     url: "https://pmd.olamov.com/",
