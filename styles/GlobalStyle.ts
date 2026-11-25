@@ -28,7 +28,6 @@ const GlobalStyle = styled.createGlobalStyle`
   body,
   html {
     font-family: ${({ theme }) => theme.formats.systemFont};
-    min-width: 800px;
   }
 
   body {
